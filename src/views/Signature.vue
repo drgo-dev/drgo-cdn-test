@@ -112,59 +112,37 @@ const deleteFile = (type) => {
 
 <template>
   <div class="uploader-container">
-    <div v-if="isLoading" class="loading-overlay">
-      <div class="spinner"></div>
-      <p>업로드 중입니다...</p>
-    </div>
-
-    <div class="header">
-      <h1>시그니처 업로드</h1>
-    </div>
-
-    <div v-if="statusMessage" class="status-box">{{ statusMessage }}</div>
-
     <div class="upload-section">
       <div class="upload-box">
         <h3>알림 이미지</h3>
-        <div class="preview-area">
-          <img v-if="imageUrl" :src="imageUrl" alt="이미지 미리보기" class="image-preview" />
-          <div v-else class="placeholder">이미지 미리보기</div>
-        </div>
         <div class="button-group">
-          <input type="file" @change="handleFileUpload($event, 'image')" accept="image/*" id="image-upload" style="display:none" :disabled="!user" />
-          <label for="image-upload" class="btn" :class="{ disabled: !user }">파일 선택</label>
-          <button class="btn" :disabled="!user">외부 링크</button>
+          <input type="file" @change="handleFileUpload($event, 'image')" ... />
+          <label for="image-upload" ...>파일 선택</label>
           <button v-if="imageUrl" @click="deleteFile('image')" class="btn-delete">파일 삭제</button>
         </div>
       </div>
 
       <div class="upload-box">
         <h3>알림음</h3>
-        <div class="preview-area">
-          <audio v-if="audioUrl" :src="audioUrl" controls class="audio-preview"></audio>
-          <div v-else class="placeholder">사운드 사용안함</div>
-        </div>
         <div class="button-group">
-          <input type="file" @change="handleFileUpload($event, 'audio')" accept="audio/*" id="audio-upload" style="display:none" :disabled="!user" />
-          <label for="audio-upload" class="btn" :class="{ disabled: !user }">파일 선택</label>
-          <button class="btn" :disabled="!user">외부 링크</button>
+          <input type="file" @change="handleFileUpload($event, 'audio')" ... />
+          <label for="audio-upload" ...>파일 선택</label>
           <button v-if="audioUrl" @click="deleteFile('audio')" class="btn-delete">파일 삭제</button>
         </div>
       </div>
     </div>
+
     <div class="list-section">
       <h2>내 시그니처 목록</h2>
-      <div v-if="signatures.length === 0 && user" class="empty-list">
-        업로드한 파일이 없습니다.
-      </div>
+      <div v-if="signatures.length === 0 && user" class="empty-list">...</div>
       <div v-else class="signature-grid">
         <div v-for="sig in signatures" :key="sig.id" class="signature-item">
-          <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" class="list-preview" />
-          <audio v-else-if="sig.file_type === 'audio'" :src="sig.file_url" controls class="list-preview"></audio>
+          <img v-if="sig.file_type === 'image'" :src="sig.file_url" ... />
+          <audio v-else-if="sig.file_type === 'audio'" :src="sig.file_url" ...></audio>
 
           <div class="item-info">
             <p class="file-name">{{ sig.file_name }}</p>
-            <p class="upload-date">{{ new Date(sig.created_at).toLocaleString() }}</p>
+            <button @click="copyUrl(sig.file_url)" class="btn-copy">링크 복사</button>
           </div>
         </div>
       </div>
@@ -453,5 +431,38 @@ audio.list-preview {
   font-size: 0.9em;
   color: #888;
   margin: 0;
+}
+
+.item-info {
+  padding: 15px;
+  display: flex; /* 가로 정렬을 위해 추가 */
+  flex-direction: column; /* 세로 정렬 기본 */
+}
+
+.file-name {
+  font-weight: 600;
+  margin: 0 0 10px 0; /* 버튼과의 간격 추가 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-grow: 1; /* 이름이 공간을 최대한 차지하도록 */
+}
+
+/* 링크 복사 버튼 스타일 */
+.btn-copy {
+  padding: 8px 12px;
+  border: 1px solid #007bff;
+  background-color: #fff;
+  color: #007bff;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s, color 0.2s;
+  width: 100%; /* 너비 꽉 채우기 */
+}
+
+.btn-copy:hover {
+  background-color: #007bff;
+  color: #fff;
 }
 </style>
