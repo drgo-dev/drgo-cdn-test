@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient.js';
 import LoginView from '../views/LoginView.vue';
 import Signature from '../views/Signature.vue';
 import SignupView from '../views/SignupView.vue';
+import MyPageView from '../views/MyPageView.vue';
 
 
 const router = createRouter({
@@ -25,6 +26,12 @@ const router = createRouter({
             path: '/signup',
             name: 'signup',
             component: SignupView,
+        },
+        {
+            path: '/mypage', // 2. 새 경로 추가
+            name: 'mypage',
+            component: MyPageView,
+            meta: { requiresAuth: true }, // 로그인이 필요한 페이지로 설정
         },
     ],
 });

@@ -4,38 +4,38 @@ import { supabase } from './lib/supabaseClient';
 import { useRouter, RouterView, RouterLink } from 'vue-router';
 
 const user = ref(null);
+const profile = ref(null);
 const router = useRouter();
 
-// 로그아웃 함수
 const handleLogout = async () => {
   try {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
-    // 로그아웃 후 로그인 페이지로 이동
     router.push('/');
   } catch (error) {
     console.error('로그아웃 에러:', error);
   }
 };
 
-// 컴포넌트가 마운트될 때와 인증 상태가 바뀔 때마다 사용자 정보를 업데이트합니다.
+// onAuthStateChange 리스너만 활성화합니다.
+// 안쪽 로직은 최소화하여 콘솔에 로그만 찍도록 합니다.
 onMounted(() => {
   supabase.auth.onAuthStateChange((event, session) => {
+    console.log('Supabase Auth Event:', event, session); // 인증 이벤트를 콘솔에서 확인
     user.value = session?.user || null;
-    if (event === 'SIGNED_IN') {
-      router.push('/signature');
-    }
   });
 });
 </script>
+
 <template>
   <header class="navbar">
     <nav>
       <router-link to="/" class="brand">Dr.Go CDN</router-link>
       <div class="nav-links">
         <template v-if="user">
-          <span>{{ user.email }}</span>
-          <router-link to="/signature">Signature</router-link>
+          <span>{{ profile?.nickname || user.email }}</span>
+          <router-link to="/mypage">마이페이지</router-link>
+          <router-link to="/signature">시그니처</router-link>
           <button @click="handleLogout" class="logout-button">로그아웃</button>
         </template>
         <template v-else>
