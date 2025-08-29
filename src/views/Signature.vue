@@ -1,151 +1,87 @@
 <script setup>
-    import { ref, onMounted } from 'vue';
-    import { supabase } from '../lib/supabaseClient';
+import { ref, onMounted } from 'vue';
+import { supabase } from '../lib/supabaseClient';
 
-    // --- 상태 변수 정의 ---
-    const imageUrl = ref('');
-    const audioUrl = ref('');
-    const isLoading = ref(false);
-    const user = ref(null);
-    const statusMessage = ref('사용자 정보를 확인 중입니다...');
-    const signatures = ref([]);
-    const profile = ref(null); // profile 변수 추가
+// --- 상태 변수 ---
+const imageUrl = ref('');
+const audioUrl = ref('');
+const isLoading = ref(false);
+const user = ref(null);
+const profile = ref(null);
+const statusMessage = ref('사용자 정보를 확인 중입니다...');
+const signatures = ref([]);
 
-    // --- 함수 정의 ---
+// --- 함수 ---
+const copyUrl = (url) => {
+  if (!url) return alert('복사할 URL이 없습니다.');
+  navigator.clipboard.writeText(url)
+      .then(() => alert('클립보드에 URL이 복사되었습니다!'))
+      .catch(err => console.error('클립보드 복사 실패:', err));
+};
 
-    // 클립보드 복사 함수
-    const copyUrl = (url) => {
-    if (!url) {
-    alert('복사할 URL이 없습니다.');
-    return;
-  }
-    navigator.clipboard.writeText(url).then(() => {
-    alert('클립보드에 URL이 복사되었습니다!');
-  }).catch(err => {
-    console.error('클립보드 복사 실패:', err);
-    alert('URL 복사에 실패했습니다.');
-  });
-  };
-
-    // 시그니처 목록 불러오기 함수
-    const fetchSignatures = async () => {
-    if (!user.value) return;
-    try {
+const fetchSignatures = async () => {
+  if (!user.value) return;
+  try {
     const { data, error } = await supabase
-    .from('signatures')
-    .select('*')
-    .eq('user_id', user.value.id)
-    .order('created_at', { ascending: false });
+        .from('signatures')
+        .select('*')
+        .eq('user_id', user.value.id)
+        .order('created_at', { ascending: false });
     if (error) throw error;
     signatures.value = data;
   } catch (error) {
     console.error('파일 목록 로딩 에러:', error);
   }
-  };
+};
 
-    // 사용자 정보 및 프로필 확인 함수
-    const checkUser = async () => {
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    user.value = currentUser;
+const checkUser = async () => {
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  user.value = currentUser;
 
-    if (!user.value) {
-    statusMessage.value = '파일을 업로드하려면 로그인이 필요합니다.';
-  } else {
-    // 사용자의 등급 정보도 함께 가져옵니다.
+  if (currentUser) {
     const { data: userProfile } = await supabase
-    .from('profiles')
-    .select('grade')
-    .eq('id', user.value.id)
-    .single();
+        .from('profiles')
+        .select('grade')
+        .eq('id', currentUser.id)
+        .single();
     profile.value = userProfile;
     statusMessage.value = '';
     await fetchSignatures();
+  } else {
+    statusMessage.value = '기능을 사용하려면 로그인이 필요합니다.';
   }
-  };
+};
 
-    // 파일 업로드 처리 함수
-    const handleFileUpload = async (event, type) => {
-      if (!user.value || !profile.value) { // !profile.value 체크 추가
-        alert('사용자 정보가 로딩 중입니다. 잠시 후 다시 시도해주세요.');
-        return;
-      }
-    // D등급 사용자는 업로드 불가
-    if (profile.value?.grade === 'D') {
-    alert('D등급 사용자는 파일을 업로드할 수 없습니다.');
-    return;
-  }
+const handleFileUpload = async (event, type) => {
+  if (!user.value || !profile.value) return alert('사용자 정보가 로딩 중입니다.');
+  if (profile.value.grade === 'D') return alert('D등급 사용자는 파일을 업로드할 수 없습니다.');
 
-    const file = event.target.files[0];
-    if (!file) return;
+  const file = event.target.files[0];
+  if (!file) return;
 
-    isLoading.value = true;
-    try {
+  isLoading.value = true;
+  try {
     const response = await fetch('/api/upload', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: file.name, contentType: file.type }),
-  });
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: file.name, contentType: file.type }),
+    });
     if (!response.ok) throw new Error('업로드 URL 요청 실패');
-
     const { uploadUrl, publicUrl } = await response.json();
 
-    const uploadResponse = await fetch(uploadUrl, {
-    method: 'PUT',
-    body: file,
-    headers: { 'Content-Type': file.type },
-  });
-    // 파일 삭제 함수를 실제 기능으로 수정합니다.
-    const handleDelete = async (signature) => {
-      // 사용자에게 정말 삭제할 것인지 확인받습니다.
-      if (!confirm(`'${signature.file_name}' 파일을 정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
-        return;
-      }
-
-      isLoading.value = true;
-      try {
-        // 1. R2에서 실제 파일 삭제 요청
-        const fileKey = signature.file_url.split('/').pop(); // URL에서 파일 키(이름) 추출
-        const response = await fetch('/api/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: fileKey }),
-        });
-        if (!response.ok) throw new Error('R2에서 파일 삭제를 실패했습니다.');
-
-        // 2. Supabase에서 데이터 정보 삭제
-        const { error } = await supabase
-            .from('signatures')
-            .delete()
-            .eq('id', signature.id);
-        if (error) throw error;
-
-        alert('파일이 성공적으로 삭제되었습니다.');
-        await fetchSignatures(); // 목록 새로고침
-
-      } catch (error) {
-        console.error('삭제 중 에러 발생:', error);
-        alert(`오류가 발생했습니다: ${error.message}`);
-      } finally {
-        isLoading.value = false;
-      }
-    };
-
-      if (!uploadResponse.ok) throw new Error('R2에 파일 업로드 실패');
+    const uploadResponse = await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+    if (!uploadResponse.ok) throw new Error('R2에 파일 업로드 실패');
 
     const { error } = await supabase.from('signatures').insert({
-    file_name: file.name,
-    file_url: publicUrl,
-    file_type: type,
-    user_id: user.value.id,
-  });
+      file_name: file.name,
+      file_url: publicUrl,
+      file_type: type,
+      user_id: user.value.id,
+    });
     if (error) throw error;
 
-    // 업로드 성공 후 미리보기 URL을 해당 ref 변수에 할당합니다.
-    if (type === 'image') {
-      imageUrl.value = publicUrl;
-    } else if (type === 'audio') {
-      audioUrl.value = publicUrl;
-    }
+    if (type === 'image') imageUrl.value = publicUrl;
+    else if (type === 'audio') audioUrl.value = publicUrl;
 
     alert('업로드 성공!');
     await fetchSignatures();
@@ -155,29 +91,48 @@
   } finally {
     isLoading.value = false;
   }
-  };
+};
 
-    // 미리보기 파일 삭제 함수 (UI에서만)
-    const deleteFile = (type) => {
-    if (type === 'image') imageUrl.value = '';
-    if (type === 'audio') audioUrl.value = '';
-  };
+const handleDelete = async (signature) => {
+  if (!confirm(`'${signature.file_name}' 파일을 정말 삭제하시겠습니까?`)) return;
 
-    // --- 컴포넌트 마운트 시 실행 ---
-    onMounted(() => {
-    checkUser();
-  });
+  isLoading.value = true;
+  try {
+    const fileKey = signature.file_url.split('/').pop();
+    const response = await fetch('/api/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: fileKey }),
+    });
+    if (!response.ok) throw new Error('R2에서 파일 삭제를 실패했습니다.');
+
+    const { error } = await supabase.from('signatures').delete().eq('id', signature.id);
+    if (error) throw error;
+
+    alert('파일이 성공적으로 삭제되었습니다.');
+    await fetchSignatures();
+  } catch (error) {
+    console.error('삭제 중 에러 발생:', error);
+    alert(`오류가 발생했습니다: ${error.message}`);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+// --- 생명주기 훅 ---
+onMounted(() => {
+  checkUser();
+});
 </script>
-
 <template>
   <div class="uploader-container">
     <div v-if="isLoading" class="loading-overlay">
       <div class="spinner"></div>
-      <p>업로드 중입니다...</p>
+      <p>처리 중입니다...</p>
     </div>
 
     <div class="header">
-      <h1>시그니처 업로드</h1>
+      <h1>시그니처 관리</h1>
     </div>
 
     <div v-if="statusMessage" class="status-box">{{ statusMessage }}</div>
@@ -190,12 +145,10 @@
           <div v-else class="placeholder">이미지 미리보기</div>
         </div>
         <div class="button-group">
-          <input type="file" @change="handleFileUpload($event, 'image')" id="image-upload" style="display:none"
-                 :disabled="!user || !profile || profile.grade === 'D'" />
+          <input type="file" @change="handleFileUpload($event, 'image')" accept="image/*" id="image-upload" style="display:none" :disabled="!user || !profile || profile.grade === 'D'" />
           <label for="image-upload" class="btn" :class="{ disabled: !user || !profile || profile.grade === 'D' }">파일 선택</label>
         </div>
       </div>
-
       <div class="upload-box">
         <h3>알림음</h3>
         <div class="preview-area">
@@ -203,8 +156,7 @@
           <div v-else class="placeholder">사운드 사용안함</div>
         </div>
         <div class="button-group">
-          <input type="file" @change="handleFileUpload($event, 'audio')" id="audio-upload" style="display:none"
-                 :disabled="!user || !profile || profile.grade === 'D'" />
+          <input type="file" @change="handleFileUpload($event, 'audio')" accept="audio/*" id="audio-upload" style="display:none" :disabled="!user || !profile || profile.grade === 'D'" />
           <label for="audio-upload" class="btn" :class="{ disabled: !user || !profile || profile.grade === 'D' }">파일 선택</label>
         </div>
       </div>
@@ -212,13 +164,18 @@
 
     <div class="list-section">
       <h2>내 시그니처 목록</h2>
-      <div v-if="signatures.length === 0 && user" class="empty-list">
+      <div v-if="!user" class="empty-list">
+        로그인 후 확인할 수 있습니다.
+      </div>
+      <div v-else-if="signatures.length === 0" class="empty-list">
         업로드한 파일이 없습니다.
       </div>
-      <div class="signature-grid">
+      <div v-else class="signature-grid">
         <div v-for="sig in signatures" :key="sig.id" class="signature-item">
+          <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" class="list-preview" />
+          <audio v-else-if="sig.file_type === 'audio'" :src="sig.file_url" controls class="list-preview"></audio>
           <div class="item-info">
-            <p class="file-name">{{ sig.file_name }}</p>
+            <p class="file-name" :title="sig.file_name">{{ sig.file_name }}</p>
             <button @click="copyUrl(sig.file_url)" class="btn-copy">링크 복사</button>
             <button @click="handleDelete(sig)" class="btn-delete-item">삭제</button>
           </div>
@@ -229,64 +186,25 @@
 </template>
 
 <style scoped>
-/* 로딩 오버레이 스타일 (기존과 동일) */
-.loading-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.7);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-  color: white;
-}
-
-.spinner {
-  border: 4px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top: 4px solid #fff;
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 10px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* ===== 새로운 스타일 시작 ===== */
+/* 이전 스타일과 거의 동일하며, 일부 정리되었습니다. */
 .uploader-container { max-width: 900px; margin: 50px auto; padding: 30px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; }
-/* 페이지 헤더 */
+.loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; color: white; }
+.spinner { border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid #fff; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 10px; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 .header { text-align: center; margin-bottom: 20px; }
 .header h1 { font-size: 2.5em; color: #2c3e50; margin: 0; font-weight: 700; }
-/* 상태 메시지 박스 */
 .status-box { background-color: #fff3cd; color: #856404; padding: 15px; border: 1px solid #ffeeba; border-radius: 8px; margin-bottom: 30px; text-align: center; font-size: 1.1em; }
-/* 업로드 섹션 */
 .upload-section { display: grid; grid-template-columns: 1fr; gap: 30px; }
 @media (min-width: 768px) { .upload-section { grid-template-columns: 1fr 1fr; } }
-/* 각 업로드 박스 */
 .upload-box { background-color: #f8f9fa; padding: 25px; border-radius: 10px; border: 1px solid #e0e0e0; display: flex; flex-direction: column; align-items: center; gap: 20px; }
 .upload-box h3 { font-size: 1.5em; color: #34495e; margin-top: 0; margin-bottom: 15px; font-weight: 600; }
-/* 미리보기 영역 */
 .preview-area { width: 100%; height: 180px; background-color: #e9ecef; border-radius: 8px; display: flex; justify-content: center; align-items: center; overflow: hidden; margin-bottom: 15px; border: 1px dashed #ced4da; }
 .image-preview, .audio-preview { max-width: 100%; max-height: 100%; object-fit: contain; }
 .placeholder { color: #6c757d; font-size: 1.1em; }
-/* 버튼 그룹 */
 .button-group { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 250px; }
-/* 버튼 기본 스타일 */
 .btn { display: inline-flex; justify-content: center; align-items: center; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 1.1em; font-weight: 500; transition: all 0.3s ease; text-decoration: none; color: #fff; background-color: #007bff; box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2); }
 .btn:hover { background-color: #0056b3; box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3); }
 .btn.disabled { background-color: #cccccc; cursor: not-allowed; box-shadow: none; }
-/* 삭제 버튼 */
-.btn-delete { background-color: #dc3545; box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2); color: #fff; padding: 10px; border-radius: 5px; border: none; cursor: pointer; }
-.btn-delete:hover { background-color: #c82333; box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3); }
-/* 목록 섹션 */
 .list-section { margin-top: 50px; padding-top: 30px; border-top: 1px solid #eee; }
 .list-section h2 { text-align: center; margin-bottom: 30px; font-size: 2em; color: #2c3e50; }
 .empty-list { text-align: center; padding: 40px; background-color: #f8f9fa; border-radius: 8px; color: #6c757d; font-size: 1.2em; }
@@ -295,33 +213,10 @@
 .signature-item:hover { transform: translateY(-5px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
 .list-preview { width: 100%; height: 180px; object-fit: cover; background-color: #f0f0f0; }
 audio.list-preview { object-fit: initial; }
-.item-info { padding: 15px; display: flex; flex-direction: column; }
-.file-name { font-weight: 600; margin: 0 0 10px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1; }
-/* 링크 복사 버튼 */
+.item-info { padding: 15px; display: flex; flex-direction: column; gap: 8px; }
+.file-name { font-weight: 600; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .btn-copy { padding: 8px 12px; border: 1px solid #007bff; background-color: #fff; color: #007bff; border-radius: 5px; cursor: pointer; font-weight: 500; transition: background-color 0.2s, color 0.2s; width: 100%; }
 .btn-copy:hover { background-color: #007bff; color: #fff; }
-/* ... 기존 스타일 코드 맨 아래에 추가 ... */
-
-.item-info {
-  /* ... 기존 item-info 스타일 ... */
-  gap: 8px; /* 버튼 사이 간격 추가 */
-}
-
-/* 목록 안의 삭제 버튼 스타일 */
-.btn-delete-item {
-  padding: 8px 12px;
-  border: 1px solid #dc3545;
-  background-color: #fff;
-  color: #dc3545;
-  border-radius: 5px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s, color 0.2s;
-  width: 100%;
-}
-
-.btn-delete-item:hover {
-  background-color: #dc3545;
-  color: #fff;
-}
+.btn-delete-item { padding: 8px 12px; border: 1px solid #dc3545; background-color: #fff; color: #dc3545; border-radius: 5px; cursor: pointer; font-weight: 500; transition: background-color 0.2s, color 0.2s; width: 100%; }
+.btn-delete-item:hover { background-color: #dc3545; color: #fff; }
 </style>
