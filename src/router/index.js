@@ -18,13 +18,9 @@ const router = createRouter({
             component: Signature, // 컴포넌트도 Signature로 변경
         },
         {
-            // 회원가입 링크 클릭 시 이동할 페이지 (나중에 만들어야 함)
             path: '/signup',
             name: 'signup',
-            // route level code-splitting
-            // this generates a separate chunk (About.[hash].js) for this route
-            // which is lazy-loaded when the route is visited.
-            component: () => import('../views/LoginView.vue'), // 임시로 AboutView 연결
+            component: SignupView,
         },
     ],
 });
