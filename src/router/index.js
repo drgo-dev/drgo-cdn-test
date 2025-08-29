@@ -4,7 +4,7 @@ import LoginView from '../views/LoginView.vue';
 import Signature from '../views/Signature.vue'
 
 const router = createRouter({
-    history: createWebHistory(import.meta.env.BASE_URL),
+    history: createWebHistory(),
     routes: [
         {
             path: '/',
