@@ -1,16 +1,20 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 
-// Cloudflare Pages Functions - R2 바인딩 업로드
+// Cloudflare Pages Functions - R2 바인딩 업로드 (FormData)
+// 바인딩 이름: MY_BUCKET  (Pages → Settings → Functions → Bindings)
+
 const cors = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': '*', // 필요 시 도메인으로 제한
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }
-const ALLOWED_AUDIO_TYPES = new Set(['audio/mpeg', 'audio/wav'])
-const MAX_SIZE = 6 * 1024 * 1024 // 6MB
-const BASE_DOMAIN = "https://nicevod.com"
 
+// 허용 타입 (이미지 + 오디오)
+const ALLOWED_TYPES = new Set([
+    'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml',
+    'audio/mpeg', 'audio/wav',
+])
+const MAX_SIZE = 6 * 1024 * 1024 // 6MB
+const BASE_DOMAIN = 'https://nicevod.com' // 복사용 퍼블릭 도메인
 
 export async function onRequestOptions() {
     return new Response(null, { headers: cors })
@@ -18,6 +22,7 @@ export async function onRequestOptions() {
 
 export async function onRequestPost({ request, env }) {
     try {
+        // ✅ FormData 받기
         const form = await request.formData()
         const file = form.get('file')
         let key = form.get('key') || ''
@@ -25,23 +30,26 @@ export async function onRequestPost({ request, env }) {
         if (!file || !file.name) return json({ error: 'file is required' }, 400)
         if (!key) return json({ error: 'key is required' }, 400)
 
-        // ✅ 타입/용량 서버측 검증
+        // 타입/용량 서버측 검증
         const ct = String(file.type || '')
-        if (!ALLOWED_AUDIO_TYPES.has(ct)) {
-            return json({ error: 'Only mp3 or wav allowed' }, 415)
+        if (!ALLOWED_TYPES.has(ct)) {
+            return json({ error: 'Only images (png/jpeg/gif/webp/svg) or audio (mp3/wav) allowed' }, 415)
         }
         if ((file.size ?? 0) > MAX_SIZE) {
             return json({ error: 'Max 6MB' }, 413)
         }
 
+        // 키 정리
         if (key.startsWith('/')) key = key.slice(1)
 
+        // 업로드 (R2 바인딩 사용)
         await env.MY_BUCKET.put(key, file.stream(), {
             httpMetadata: { contentType: ct },
         })
 
-        const publicBase = env.R2_PUBLIC_URL || ''
-        const publicUrl = publicBase ? `${publicBase}/${key}` : null
+        // 퍼블릭 URL (원하신 nicevod.com으로 고정)
+        const publicUrl = `${BASE_DOMAIN}/${key}`
+
         return json({ ok: true, key, publicUrl })
     } catch (e) {
         return json({ error: String(e) }, 500)
@@ -54,7 +62,6 @@ function json(data, status = 200) {
         headers: { 'Content-Type': 'application/json', ...cors },
     })
 }
-
 
 
 

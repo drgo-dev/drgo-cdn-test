@@ -63,58 +63,42 @@ const handleFileUpload = async (event, type) => {
   const file = event.target.files[0];
   if (!file) return;
 
-  // ✅ 포맷 검사
-  if (type === 'audio' && !ALLOWED_AUDIO_TYPES.has(file.type)) {
-    alert('오디오 파일은 mp3 또는 wav만 업로드할 수 있습니다.');
-    event.target.value = '';
-    return;
-  }
-
-  // ✅ 용량 검사
-  if (file.size > MAX_SIZE) {
-    alert('파일은 최대 6MB까지 업로드할 수 있습니다.');
-    event.target.value = '';
-    return;
-  }
-
-  // 업로드 키(버킷 내부 경로) 생성
-  const ext = file.name.includes('.') ? file.name.split('.').pop() : 'bin';
-  const key = `uploads/signature/${crypto.randomUUID()}.${ext}`;
-
   isLoading.value = true;
   try {
-    // ✅ FormData 로 서버에 바로 업로드 (presigned URL 단계 없음)
+    // 1. 서버(/api/upload)에 FormData 업로드
     const fd = new FormData();
+    const ext = file.name.includes('.') ? file.name.split('.').pop() : 'bin';
+    const key = `uploads/signature/${crypto.randomUUID()}.${ext}`;
     fd.append('file', file);
     fd.append('key', key);
 
     const res = await fetch('/api/upload', { method: 'POST', body: fd });
-    const out = await res.json().catch(() => ({}));
+    const out = await res.json();
     if (!res.ok || !out.ok) throw new Error(out.error || '업로드 실패');
 
-    const publicUrl = out.publicUrl ?? out.key; // 서버가 publicUrl 주면 사용
+    const publicUrl = out.publicUrl; // ✅ nicevod.com 기반 URL
 
-    // DB 기록
+    // 2. DB에 기록
     const { error } = await supabase.from('signatures').insert({
       file_name: file.name,
-      file_url: publicUrl || `/${key}`, // publicUrl 없으면 키만 저장해도 OK
+      file_url: publicUrl,   // ✅ 여기서 nicevod.com 기준 URL 저장
       file_type: type,
       user_id: user.value.id,
     });
     if (error) throw error;
 
+    // 3. 상태 갱신
     if (type === 'image') imageUrl.value = publicUrl;
     if (type === 'audio') audioUrl.value = publicUrl;
 
     alert('업로드 성공!');
     await fetchSignatures();
   } catch (err) {
-    console.error('업로드 과정 중 에러 발생:', err);
+    console.error('업로드 에러:', err);
     alert(`오류가 발생했습니다: ${err.message}`);
   } finally {
     isLoading.value = false;
-    // 같은 파일 다시 선택 가능하도록 input 초기화
-    event.target.value = '';
+    event.target.value = ''; // 같은 파일 다시 선택할 수 있도록 초기화
   }
 };
 
