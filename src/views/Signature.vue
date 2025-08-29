@@ -11,12 +11,6 @@ const profile = ref(null);
 const statusMessage = ref('사용자 정보를 확인 중입니다...');
 const signatures = ref([]);
 
-const { error } = await supabase.from('signatures').insert({
-  file_name: file.name,
-  file_url: publicUrl,   // ✅ 여기서 nicevod.com 기준 URL 저장
-  file_type: type,
-  user_id: user.value.id,
-});
 
 // --- 함수 ---
 const copyUrl = (url) => {
