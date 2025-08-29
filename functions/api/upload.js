@@ -3,18 +3,23 @@
 // 바인딩 이름: MY_BUCKET  (Pages → Settings → Functions → Bindings)
 
 const cors = {
-    'Access-Control-Allow-Origin': '*', // 필요 시 도메인으로 제한
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }
-
-// 허용 타입 (이미지 + 오디오)
 const ALLOWED_TYPES = new Set([
-    'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml',
-    'audio/mpeg', 'audio/wav',
+    'image/png','image/jpeg','image/gif','image/webp','image/svg+xml',
+    'audio/mpeg','audio/wav'
 ])
+
 const MAX_SIZE = 6 * 1024 * 1024 // 6MB
-const BASE_DOMAIN = 'https://nicevod.com' // 복사용 퍼블릭 도메인
+const BASE_DOMAIN = 'https://cdn.nicevod.com' // 복사용 퍼블릭 도메인
+
+function sanitizeBaseName(name) {
+    // 경로 제거 (슬래시 금지), 공백 트림
+    const justName = name.split('/').pop().trim()
+    return justName || `file-${crypto.randomUUID()}`
+}
 
 export async function onRequestOptions() {
     return new Response(null, { headers: cors })
@@ -22,46 +27,39 @@ export async function onRequestOptions() {
 
 export async function onRequestPost({ request, env }) {
     try {
-        // ✅ FormData 받기
         const form = await request.formData()
         const file = form.get('file')
-        let key = form.get('key') || ''
+        let clientKey = form.get('key') || ''         // 클라에서 보낼 수도 있음(선택)
 
         if (!file || !file.name) return json({ error: 'file is required' }, 400)
-        if (!key) return json({ error: 'key is required' }, 400)
-
-        // 타입/용량 서버측 검증
         const ct = String(file.type || '')
-        if (!ALLOWED_TYPES.has(ct)) {
-            return json({ error: 'Only images (png/jpeg/gif/webp/svg) or audio (mp3/wav) allowed' }, 415)
-        }
-        if ((file.size ?? 0) > MAX_SIZE) {
-            return json({ error: 'Max 6MB' }, 413)
-        }
+        if (!ALLOWED_TYPES.has(ct)) return json({ error: 'Only images/mp3/wav' }, 415)
+        if ((file.size ?? 0) > MAX_SIZE) return json({ error: 'Max 6MB' }, 413)
 
-        // 키 정리
-        if (key.startsWith('/')) key = key.slice(1)
+        // ✅ 루트에 "파일이름.확장자"로만 저장되도록 강제
+        const base = sanitizeBaseName(clientKey || file.name || `${crypto.randomUUID()}.bin`)
+        const key = base  // R2에 저장되는 키 (루트에 바로 저장)
 
-        // 업로드 (R2 바인딩 사용)
-        await env.MY_BUCKET.put(key, file.stream(), {
-            httpMetadata: { contentType: ct },
-        })
+        await env.MY_BUCKET.put(key, file.stream(), { httpMetadata: { contentType: ct } })
 
-        // 퍼블릭 URL (원하신 nicevod.com으로 고정)
-        const publicUrl = `${BASE_DOMAIN}/${key}`
-
+        // ✅ 최종 공개 URL: https://cdn.nicevod.com/파일이름.확장자
+        const publicUrl = `${BASE_DOMAIN}/${encodeURIComponent(key)}`
         return json({ ok: true, key, publicUrl })
     } catch (e) {
         return json({ error: String(e) }, 500)
     }
 }
+function sanitizeBaseName(name) {
+    // 경로 제거, 공백 제거
+    let justName = name.split('/').pop().trim()
+    if (!justName) return `${crypto.randomUUID()}.bin`
+    return justName
+}
 
 function json(data, status = 200) {
-    return new Response(JSON.stringify(data), {
-        status,
-        headers: { 'Content-Type': 'application/json', ...cors },
-    })
+    return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', ...cors } })
 }
+
 
 
 

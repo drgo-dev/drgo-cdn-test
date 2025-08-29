@@ -66,11 +66,15 @@ const handleFileUpload = async (event, type) => {
   isLoading.value = true;
   try {
     // 1. 서버(/api/upload)에 FormData 업로드
-    const fd = new FormData();
-    const ext = file.name.includes('.') ? file.name.split('.').pop() : 'bin';
-    const key = `uploads/signature/${crypto.randomUUID()}.${ext}`;
-    fd.append('file', file);
-    fd.append('key', key);
+
+    const ext = file.name.includes('.') ? file.name.split('.').pop() : 'bin'
+    const base = file.name.split('/').pop() // 경로 제거
+    const key  = base
+
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('key', key)                 // 서버에서 sanitize 하니 안전
+    await fetch('/api/upload', { method:'POST', body: fd })
 
     const res = await fetch('/api/upload', { method: 'POST', body: fd });
     const out = await res.json();
@@ -81,7 +85,7 @@ const handleFileUpload = async (event, type) => {
     // 2. DB에 기록
     const { error } = await supabase.from('signatures').insert({
       file_name: file.name,
-      file_url: publicUrl,   // ✅ 여기서 nicevod.com 기준 URL 저장
+      file_url: out.publicUrl,   // ✅ 여기서 nicevod.com 기준 URL 저장
       file_type: type,
       user_id: user.value.id,
     });
@@ -150,20 +154,19 @@ const handleDelete = async (signature) => {
   isLoading.value = true;
   try {
     // ✅ URL → key (path 전체). 예: https://cdn/ uploads/signature/xxx.png
-    let key = signature.file_url;
+    let key = signature.file_url
     try {
-      const u = new URL(signature.file_url);
-      key = u.pathname.startsWith('/') ? u.pathname.slice(1) : u.pathname;
+      const u = new URL(signature.file_url)
+      key = decodeURIComponent(u.pathname.replace(/^\//,''))
     } catch {
-      // file_url이 절대 URL이 아닐 경우 대비: 앞의 "/" 제거 정도만
-      key = key.startsWith('/') ? key.slice(1) : key;
+      key = signature.file_url.replace(/^\//,'')
     }
-
-    const response = await fetch('/api/delete', {
+    await fetch('/api/delete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type':'application/json' },
       body: JSON.stringify({ key }),
-    });
+    })
+
     if (!response.ok) throw new Error('R2에서 파일 삭제를 실패했습니다.');
 
     const { error } = await supabase.from('signatures').delete().eq('id', signature.id);
