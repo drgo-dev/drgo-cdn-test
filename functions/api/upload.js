@@ -7,6 +7,8 @@ const cors = {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }
+const ALLOWED_AUDIO_TYPES = new Set(['audio/mpeg', 'audio/wav'])
+const MAX_SIZE = 6 * 1024 * 1024 // 6MB
 
 export async function onRequestOptions() {
     return new Response(null, { headers: cors })
@@ -14,7 +16,6 @@ export async function onRequestOptions() {
 
 export async function onRequestPost({ request, env }) {
     try {
-        // ✅ FormData 받기
         const form = await request.formData()
         const file = form.get('file')
         let key = form.get('key') || ''
@@ -22,22 +23,23 @@ export async function onRequestPost({ request, env }) {
         if (!file || !file.name) return json({ error: 'file is required' }, 400)
         if (!key) return json({ error: 'key is required' }, 400)
 
-        if (key.startsWith('/')) key = key.slice(1)
-        const contentType = String(file.type || 'application/octet-stream')
-
-        // 6MB 제한
-        if ((file.size ?? 0) > 6 * 1024 * 1024) {
-            return json({ error: '파일은 최대 6MB까지 업로드할 수 있습니다.' }, 413)
+        // ✅ 타입/용량 서버측 검증
+        const ct = String(file.type || '')
+        if (!ALLOWED_AUDIO_TYPES.has(ct)) {
+            return json({ error: 'Only mp3 or wav allowed' }, 415)
+        }
+        if ((file.size ?? 0) > MAX_SIZE) {
+            return json({ error: 'Max 6MB' }, 413)
         }
 
-        // R2 업로드
+        if (key.startsWith('/')) key = key.slice(1)
+
         await env.MY_BUCKET.put(key, file.stream(), {
-            httpMetadata: { contentType },
+            httpMetadata: { contentType: ct },
         })
 
         const publicBase = env.R2_PUBLIC_URL || ''
         const publicUrl = publicBase ? `${publicBase}/${key}` : null
-
         return json({ ok: true, key, publicUrl })
     } catch (e) {
         return json({ error: String(e) }, 500)
@@ -50,6 +52,7 @@ function json(data, status = 200) {
         headers: { 'Content-Type': 'application/json', ...cors },
     })
 }
+
 
 
 

@@ -52,14 +52,27 @@ const checkUser = async () => {
   }
 };
 
+const ALLOWED_AUDIO_TYPES = new Set(['audio/mpeg', 'audio/wav']);
+const MAX_SIZE = 6 * 1024 * 1024; // 6MB
+
 const handleFileUpload = async (event, type) => {
   if (!user.value || !profile.value) return alert('사용자 정보가 로딩 중입니다.');
   if (profile.value.grade === 'D') return alert('D등급 사용자는 파일을 업로드할 수 없습니다.');
 
   const file = event.target.files[0];
   if (!file) return;
-  if (file.size > 6 * 1024 * 1024) {
-    alert('6MB 이하만 업로드할 수 있습니다.');
+
+  // ✅ 포맷 검사
+  if (type === 'audio' && !ALLOWED_AUDIO_TYPES.has(file.type)) {
+    alert('오디오 파일은 mp3 또는 wav만 업로드할 수 있습니다.');
+    event.target.value = '';
+    return;
+  }
+
+  // ✅ 용량 검사
+  if (file.size > MAX_SIZE) {
+    alert('파일은 최대 6MB까지 업로드할 수 있습니다.');
+    event.target.value = '';
     return;
   }
 
