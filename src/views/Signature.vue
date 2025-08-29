@@ -6,26 +6,45 @@ const imageUrl = ref('');
 const audioUrl = ref('');
 const isLoading = ref(false);
 const user = ref(null);
-const statusMessage = ref('사용자 정보를 확인 중입니다...'); // 상태 메시지 변수
+const statusMessage = ref('사용자 정보를 확인 중입니다...');
+const signatures = ref([]); // 1. 업로드된 파일 목록을 저장할 배열 추가
+
 
 onMounted(() => {
   checkUser();
 });
+
+// 2. 파일 목록을 불러오는 함수 새로 추가
+const fetchSignatures = async () => {
+  if (!user.value) return;
+
+  try {
+    const { data, error } = await supabase
+        .from('signatures') // 'signatures' 테이블에서
+        .select('*') // 모든 컬럼을 선택
+        .eq('user_id', user.value.id) // 현재 로그인한 사용자의 user_id와 일치하는 것만
+        .order('created_at', { ascending: false }); // 최신순으로 정렬
+
+    if (error) throw error;
+    signatures.value = data; // 결과를 signatures 배열에 저장
+  } catch (error) {
+    console.error('파일 목록 로딩 에러:', error);
+  }
+};
 
 const checkUser = async () => {
   const { data } = await supabase.auth.getUser();
   user.value = data.user;
 
   if (!user.value) {
-    // 로그인이 되어 있지 않다면, 에러가 아니라 정상 상태 메시지를 보여줍니다.
     statusMessage.value = '파일을 업로드하려면 로그인이 필요합니다.';
   } else {
-    statusMessage.value = ''; // 로그인 되어 있다면 메시지 없음
+    statusMessage.value = '';
+    await fetchSignatures(); // 3. 로그인 확인 후 바로 파일 목록 불러오기
   }
 };
 
 const handleFileUpload = async (event, type) => {
-  // 로그인이 안되어 있으면 업로드 시도 자체를 막습니다.
   if (!user.value) {
     alert('로그인이 필요합니다.');
     return;
@@ -36,12 +55,14 @@ const handleFileUpload = async (event, type) => {
 
   isLoading.value = true;
   try {
+
     const response = await fetch('/api/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: file.name, contentType: file.type }),
     });
     if (!response.ok) throw new Error('업로드 URL 요청 실패');
+
     const { uploadUrl, publicUrl } = await response.json();
 
     const uploadResponse = await fetch(uploadUrl, {
@@ -59,9 +80,9 @@ const handleFileUpload = async (event, type) => {
     });
     if (error) throw error;
 
-    if (type === 'image') imageUrl.value = publicUrl;
-    if (type === 'audio') audioUrl.value = publicUrl;
     alert('업로드 성공!');
+    await fetchSignatures(); // 4. 새 파일 업로드 후 목록 새로고침
+
   } catch (error) {
     console.error('업로드 과정 중 에러 발생:', error);
     alert(`오류가 발생했습니다: ${error.message}`);
@@ -115,6 +136,23 @@ const deleteFile = (type) => {
           <label for="audio-upload" class="btn" :class="{ disabled: !user }">파일 선택</label>
           <button class="btn" :disabled="!user">외부 링크</button>
           <button v-if="audioUrl" @click="deleteFile('audio')" class="btn-delete">파일 삭제</button>
+        </div>
+      </div>
+    </div>
+    <div class="list-section">
+      <h2>내 시그니처 목록</h2>
+      <div v-if="signatures.length === 0 && user" class="empty-list">
+        업로드한 파일이 없습니다.
+      </div>
+      <div v-else class="signature-grid">
+        <div v-for="sig in signatures" :key="sig.id" class="signature-item">
+          <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" class="list-preview" />
+          <audio v-else-if="sig.file_type === 'audio'" :src="sig.file_url" controls class="list-preview"></audio>
+
+          <div class="item-info">
+            <p class="file-name">{{ sig.file_name }}</p>
+            <p class="upload-date">{{ new Date(sig.created_at).toLocaleString() }}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -330,5 +368,77 @@ const deleteFile = (type) => {
     padding: 10px 15px;
     font-size: 1em;
   }
+}
+
+/* ... 기존 스타일 코드 맨 아래에 추가 ... */
+
+.list-section {
+  margin-top: 50px;
+  padding-top: 30px;
+  border-top: 1px solid #eee;
+}
+
+.list-section h2 {
+  text-align: center;
+  margin-bottom: 30px;
+  font-size: 2em;
+  color: #2c3e50;
+}
+
+.empty-list {
+  text-align: center;
+  padding: 40px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  color: #6c757d;
+  font-size: 1.2em;
+}
+
+.signature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.signature-item {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.signature-item:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.list-preview {
+  width: 100%;
+  height: 180px;
+  object-fit: cover; /* 이미지는 꽉 차게, 오디오는 높이만 차지 */
+  background-color: #f0f0f0;
+}
+
+audio.list-preview {
+  object-fit: initial;
+}
+
+.item-info {
+  padding: 15px;
+}
+
+.file-name {
+  font-weight: 600;
+  margin: 0 0 5px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upload-date {
+  font-size: 0.9em;
+  color: #888;
+  margin: 0;
 }
 </style>
