@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 // 방금 만든 로그인 뷰를 가져옵니다.
 import LoginView from '../views/LoginView.vue';
-import Signature from '../views/Signature.vue'
+import Signature from '../views/Signature.vue';
 
 const router = createRouter({
     history: createWebHistory(),

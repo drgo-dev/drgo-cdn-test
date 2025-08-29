@@ -1,11 +1,13 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-// Cloudflare Pages에 서브도메인/루트 모두 대응
+// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [vue()],
+    plugins: [vue()],
+    // 이 'base' 설정을 추가합니다.
+    // 빌드 시 모든 경로를 상대 경로로 만들어줍니다.
     base: './',
-  build: {
-    outDir: 'dist'
-  }
+    build: {
+        outDir: 'dist'
+    }
 })
