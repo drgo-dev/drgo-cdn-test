@@ -21,7 +21,7 @@ export async function onRequestPost({ request, env }) {
         // 3. R2에서 객체(파일) 삭제 명령을 실행합니다.
         await s3.send(
             new DeleteObjectCommand({
-                Bucket: env.R2_BUCKET_NAME,
+                Bucket: env.MY_BUCKET,
                 Key: key,
             })
         );
