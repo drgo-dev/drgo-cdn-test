@@ -5,39 +5,67 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-// ✅ 항상 "객체" 형태를 유지 (null 금지)
+// 항상 객체 형태 유지
 const user = ref(null)
-const profile = ref({ nickname: '', grade: null })
+const profile = ref({ nickname: '', grade: null, broadcast_platform: null, broadcast_id: null })
 
-// 프로필 로더 (결과 없으면 기본값 유지)
+// 프로필 로더 (결과 없으면 기본값)
 const loadProfile = async (currentUser) => {
   if (!currentUser?.id) {
-    profile.value = { nickname: '', grade: null }
+    profile.value = { nickname: '', grade: null, broadcast_platform: null, broadcast_id: null }
     return
   }
 
   const { data, error } = await supabase
       .from('profiles')
-      .select('nickname, grade')
+      .select('nickname, grade, broadcast_platform, broadcast_id')  // ✅ 컬럼 확장
       .eq('id', currentUser.id)
-      .maybeSingle()             // ← 결과 없으면 data === null
+      .maybeSingle()
 
   if (error) {
     console.error('프로필 로딩 중 에러:', error)
-    profile.value = { nickname: '', grade: null }
+    profile.value = { nickname: '', grade: null, broadcast_platform: null, broadcast_id: null }
     return
   }
 
-  profile.value = data ?? { nickname: '', grade: null }
+  profile.value = data ?? { nickname: '', grade: null, broadcast_platform: null, broadcast_id: null }
+}
+
+// ✅ 회원가입 폼에서 세션스토리지에 넣어둔 값이 있으면 upsert
+const upsertProfileExtraFromSession = async (currentUser) => {
+  if (!currentUser?.id) return
+  try {
+    const raw = sessionStorage.getItem('signup.extra')
+    if (!raw) return
+    const extra = JSON.parse(raw)
+    // 비어있는 값만 채우고 싶으면 조건 분기 추가 가능
+    const { error } = await supabase.from('profiles').upsert({
+      id: currentUser.id,
+      nickname: extra?.nickname ?? undefined,
+      broadcast_platform: extra?.broadcast_platform ?? undefined,
+      broadcast_id: extra?.broadcast_id ?? undefined,
+    })
+    if (error) {
+      console.error('프로필 upsert 에러:', error)
+      return
+    }
+    sessionStorage.removeItem('signup.extra')
+    // 최신값 재로딩 (선택)
+    await loadProfile(currentUser)
+  } catch (e) {
+    console.error('signup.extra 처리 중 에러:', e)
+  }
 }
 
 let unsub = null
 
 onMounted(async () => {
   // 첫 진입 시 세션 동기화
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { session} } = await supabase.auth.getSession()
   user.value = session?.user ?? null
   await loadProfile(user.value)
+  // ✅ 최초 진입 시에도 upsert 시도
+  if (user.value) await upsertProfileExtraFromSession(user.value)
 
   // 로그인 상태 변화 구독
   const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -45,14 +73,17 @@ onMounted(async () => {
 
     if (user.value) {
       await loadProfile(user.value)
+      // ✅ 로그인/회원가입 직후 upsert 시도
+      await upsertProfileExtraFromSession(user.value)
     } else {
-      profile.value = { nickname: '', grade: null }
+      profile.value = { nickname: '', grade: null, broadcast_platform: null, broadcast_id: null }
     }
 
     if (event === 'SIGNED_IN' && router.currentRoute.value.name === 'login') {
       router.push('/signature')
     }
   })
+  // supabase-js v2 구독 핸들
   unsub = sub?.subscription
 })
 
@@ -65,13 +96,14 @@ const handleLogout = async () => {
   try {
     await supabase.auth.signOut()
     user.value = null
-    profile.value = { nickname: '', grade: null }
+    profile.value = { nickname: '', grade: null, broadcast_platform: null, broadcast_id: null }
     router.push('/')
   } catch (error) {
     console.error('로그아웃 에러:', error)
   }
 }
 </script>
+
 
 <template>
   <header class="navbar">
@@ -84,6 +116,9 @@ const handleLogout = async () => {
             {{ (profile && profile.nickname) ? profile.nickname : user.email }}
             ({{ profile?.grade ?? '' }} 등급)
           </span>
+          <small v-if="profile?.broadcast_platform && profile?.broadcast_id">
+            · {{ profile.broadcast_platform }} / {{ profile.broadcast_id }}
+          </small>
           <router-link to="/mypage">마이페이지</router-link>
           <router-link to="/signature">시그니처</router-link>
           <button @click="handleLogout" class="logout-button">로그아웃</button>

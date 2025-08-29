@@ -1,50 +1,73 @@
 <script setup>
-import { ref } from 'vue';
-import { supabase } from '../lib/supabaseClient';
-import { useRouter } from 'vue-router';
+import { ref } from 'vue'
+import { supabase } from '@/lib/supabaseClient'
 
-const email = ref('');
-const password = ref('');
-const isLoading = ref(false);
-const errorMessage = ref('');
-const successMessage = ref('');
+const email = ref('')
+const password = ref('')
+const nickname = ref('')
+const broadcastPlatform = ref('twitch') // twitch | youtube | afreeca 등
+const broadcastId = ref('')
 
-const router = useRouter();
+const isLoading = ref(false)
+const errorMessage = ref('')
+const successMessage = ref('')
 
-const handleSignup = async () => {
-  // 이전 메시지 초기화
-  errorMessage.value = '';
-  successMessage.value = '';
+function validate() {
+  if (!nickname.value.trim()) return '닉네임을 입력해주세요.'
+  if (!broadcastPlatform.value) return '방송 플랫폼을 선택해주세요.'
+  if (!broadcastId.value.trim()) return '방송 아이디를 입력해주세요.'
+  if (!email.value || !password.value) return '이메일과 비밀번호를 모두 입력해주세요.'
+  return ''
+}
 
-  if (!email.value || !password.value) {
-    errorMessage.value = '이메일과 비밀번호를 모두 입력해주세요.';
-    return;
-  }
+async function handleSignup() {
+  errorMessage.value = ''
+  successMessage.value = ''
 
-  isLoading.value = true;
+  const v = validate()
+  if (v) { errorMessage.value = v; return }
+
+  isLoading.value = true
   try {
+    // 추가 정보 메타데이터 + 세션스토리지에 백업
+    const extra = {
+      nickname: nickname.value.trim(),
+      broadcast_platform: broadcastPlatform.value,
+      broadcast_id: broadcastId.value.trim(),
+    }
+    sessionStorage.setItem('signup.extra', JSON.stringify(extra))
+
     const { data, error } = await supabase.auth.signUp({
       email: email.value,
       password: password.value,
-    });
+      options: { data: extra },  // user_metadata에도 보관
+    })
+    if (error) throw error
 
-    if (error) throw error;
-
-    // Supabase의 기본 설정은 이메일 인증이 필요합니다.
-    // data.user.identities가 비어있으면 이메일이 이미 존재한다는 의미일 수 있습니다.
-    if (data.user && data.user.identities && data.user.identities.length === 0) {
-      errorMessage.value = '이미 사용 중인 이메일입니다.';
-    } else {
-      successMessage.value = '회원가입 성공! 확인 이메일을 보냈습니다. 이메일을 확인해주세요.';
+    // 환경에 따라 즉시 세션이 생기면 바로 프로필 upsert
+    if (data.user?.id) {
+      await upsertProfile(data.user.id, extra)
+      sessionStorage.removeItem('signup.extra')
     }
 
-  } catch (error) {
-    console.error('회원가입 에러:', error);
-    errorMessage.value = error.message || '회원가입 중 오류가 발생했습니다.';
+    successMessage.value = '회원가입 성공! 확인 이메일을 보냈습니다. 이메일을 확인해주세요.'
+  } catch (err) {
+    console.error('회원가입 에러:', err)
+    errorMessage.value = err.message || '회원가입 중 오류가 발생했습니다.'
   } finally {
-    isLoading.value = false;
+    isLoading.value = false
   }
-};
+}
+
+async function upsertProfile(id, { nickname, broadcast_platform, broadcast_id }) {
+  const { error } = await supabase.from('profiles').upsert({
+    id,
+    nickname,
+    broadcast_platform,
+    broadcast_id,
+  })
+  if (error) throw error
+}
 </script>
 
 <template>
@@ -52,6 +75,27 @@ const handleSignup = async () => {
     <div class="auth-box">
       <h1>회원가입</h1>
       <form @submit.prevent="handleSignup">
+        <!-- 추가 정보 -->
+        <div class="input-group">
+          <label for="nickname">닉네임</label>
+          <input id="nickname" v-model="nickname" type="text" placeholder="예: 닥터고" />
+        </div>
+
+        <div class="input-group">
+          <label for="broadcastPlatform">방송 플랫폼</label>
+          <select id="broadcastPlatform" v-model="broadcastPlatform">
+            <option value="twitch">Twitch</option>
+            <option value="youtube">YouTube</option>
+            <option value="afreeca">AfreecaTV</option>
+          </select>
+        </div>
+
+        <div class="input-group">
+          <label for="broadcastId">방송 아이디</label>
+          <input id="broadcastId" v-model="broadcastId" type="text" placeholder="채널/아이디" />
+        </div>
+
+        <!-- 기본 가입 -->
         <div class="input-group">
           <label for="email">이메일</label>
           <input type="email" id="email" v-model="email" placeholder="you@example.com" />
@@ -68,12 +112,14 @@ const handleSignup = async () => {
           {{ isLoading ? '가입 중...' : '회원가입' }}
         </button>
       </form>
+
       <div class="links">
         이미 계정이 있으신가요? <router-link to="/">로그인</router-link>
       </div>
     </div>
   </div>
 </template>
+
 
 <style scoped>
 /* 로그인 뷰와 스타일 공유를 위해 유사하게 작성 */
