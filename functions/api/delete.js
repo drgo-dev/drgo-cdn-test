@@ -11,7 +11,7 @@ export async function onRequestPost({ request, env }) {
         // 2. R2 버킷에 연결합니다.
         const s3 = new S3Client({
             region: "auto",
-            endpoint: `https://<YOUR_ACCOUNT_ID>.r2.cloudflarestorage.com`,
+            endpoint: `https://https://3404ddcc1cc2726d48ce64b5c15c0fe8.r2.cloudflarestorage.com.r2.cloudflarestorage.com`,
             credentials: {
                 accessKeyId: env.R2_ACCESS_KEY_ID,
                 secretAccessKey: env.R2_SECRET_ACCESS_KEY,
