@@ -10,6 +10,25 @@ const user = ref(null);
 const profile = ref(null);
 const statusMessage = ref('사용자 정보를 확인 중입니다...');
 const signatures = ref([]);
+const CDN_BASE = 'https://cdn.nicevod.com'
+
+function normalizeUrl(input) {
+  if (!input) return ''
+  // 절대 URL이면 경로만 안전하게 인코딩해서 반환
+  try {
+    const u = new URL(input)
+    const encodedPath = u.pathname
+        .split('/')
+        .map(seg => (seg === '' ? '' : encodeURIComponent(decodeURIComponent(seg))))
+        .join('/')
+    u.pathname = encodedPath
+    return u.toString()
+  } catch {
+    // 절대 URL이 아니면 key라고 보고 CDN 도메인 붙임
+    const key = String(input).replace(/^https?:\/\/[^/]+\//, '').replace(/^\//, '')
+    return `${CDN_BASE}/${encodeURIComponent(key)}`
+  }
+}
 
 
 // --- 함수 ---
@@ -272,8 +291,16 @@ onMounted(() => {
       </div>
       <div v-else class="signature-grid">
         <div v-for="sig in signatures" :key="sig.id" class="signature-item">
-          <img v-if="sig.file_type === 'image'" :src="normalizeUrl(sig.file_url)" :alt="sig.file_name" class="list-preview" />
-          <audio v-else-if="sig.file_type === 'audio'" :src="normalizeUrl(sig.file_url)" controls class="list-preview"></audio>
+          <img v-if="sig.file_type === 'image'"
+               :src="normalizeUrl(sig.file_url)"
+               :alt="sig.file_name"
+               class="list-preview" />
+
+          <audio v-else-if="sig.file_type === 'audio'"
+                 :src="normalizeUrl(sig.file_url)"
+                 controls
+                 class="list-preview"></audio>
+
           <div class="item-info">
             <p class="file-name" :title="sig.file_name">{{ sig.file_name }}</p>
             <button @click="copyUrl(sig.file_url)" class="btn-copy">링크 복사</button>
