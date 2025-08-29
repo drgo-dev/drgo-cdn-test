@@ -116,9 +116,34 @@ const handleLogout = async () => {
             {{ (profile && profile.nickname) ? profile.nickname : user.email }}
             ({{ profile?.grade ?? '' }} 등급)
           </span>
-          <small v-if="profile?.broadcast_platform && profile?.broadcast_id">
-            · {{ profile.broadcast_platform }} / {{ profile.broadcast_id }}
+
+          <small v-if="profile?.broadcast_platform && profile?.broadcast_id" class="broadcast-info">
+            <!-- 플랫폼 아이콘 -->
+            <img
+                v-if="profile.broadcast_platform === '치지직'"
+                src="@/assets/icons/chzzk.png"
+                alt="치지직"
+                class="platform-icon"
+            />
+            <img
+                v-else-if="profile.broadcast_platform === 'soop'"
+                src="@/assets/icons/soop.png"
+                alt="soop"
+                class="platform-icon"
+            />
+            <img
+                v-else-if="profile.broadcast_platform === 'youtube'"
+                src="@/assets/icons/youtube.png"
+                alt="유튜브"
+                class="platform-icon"
+            />
+            <!-- 기본 텍스트 -->
+            {{ profile.broadcast_id }}
           </small>
+
+<!--          <small v-if="profile?.broadcast_platform && profile?.broadcast_id">
+            {{ profile.broadcast_platform }} / {{ profile.broadcast_id }}
+          </small>-->
           <router-link to="/mypage">마이페이지</router-link>
           <router-link to="/signature">시그니처</router-link>
           <button @click="handleLogout" class="logout-button">로그아웃</button>
@@ -151,6 +176,20 @@ main { padding: 20px; }
 .nav-links span { color: #555; }
 .logout-button { background-color: #007bff; color: #fff; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: 500; }
 .logout-button:hover { background-color: #0056b3; }
+.platform-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 5px;
+  margin-bottom: 2px;
+  vertical-align: middle;
+}
+.broadcast-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: #555;
+}
 </style>
 
 

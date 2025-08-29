@@ -84,15 +84,15 @@ async function upsertProfile(id, { nickname, broadcast_platform, broadcast_id })
         <div class="input-group">
           <label for="broadcastPlatform">방송 플랫폼</label>
           <select id="broadcastPlatform" v-model="broadcastPlatform">
-            <option value="twitch">Twitch</option>
-            <option value="youtube">YouTube</option>
-            <option value="afreeca">AfreecaTV</option>
+            <option value="soop">SOOP</option>
+            <option value="chzzk">치지직</option>
+            <option value="youtube">유튜브</option>
           </select>
         </div>
 
         <div class="input-group">
-          <label for="broadcastId">방송 아이디</label>
-          <input id="broadcastId" v-model="broadcastId" type="text" placeholder="채널/아이디" />
+          <label for="broadcastId">방송국 아이디</label>
+          <input id="broadcastId" v-model="broadcastId" type="text" placeholder="방송국 아이디" />
         </div>
 
         <!-- 기본 가입 -->
@@ -157,6 +157,21 @@ input {
   font-size: 1rem;
   box-sizing: border-box;
 }
+
+#broadcastPlatform{
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+  box-sizing: border-box;
+
+  /* 화살표 위치 조정 */
+  background-position: right 10px center; /* 오른쪽에서 10px 안쪽 */
+  background-repeat: no-repeat;
+  background-size: 16px;
+}
+
 button {
   width: 100%;
   padding: 12px;
