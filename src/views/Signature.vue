@@ -96,27 +96,25 @@ const handleFileUpload = async (event, type) => {
     return;
   }
 
-  // 루트에 파일명 그대로 저장 (중복 덮어쓰기 주의)
-  const base = file.name.split('/').pop();
-  const key  = base;
+  const base = file.name.split('/').pop(); // 화면표시용
 
   isLoading.value = true;
   try {
     const fd = new FormData();
     fd.append('file', file);
-    fd.append('key', key);
+    fd.append('user_id', user.value.id);                // ✅ key 대신 user_id만 전달
+    // fd.append('key', key)  ← 보내지 마세요 (서버가 자체 생성)
 
-    // ✅ 단 한 번만 호출
     const res = await fetch('/api/upload', { method: 'POST', body: fd });
     const out = await res.json();
     if (!res.ok || !out.ok) throw new Error(out.error || '업로드 실패');
 
-    const publicUrl = out.publicUrl; // https://cdn.nicevod.com/<파일명>
+    const publicUrl = out.publicUrl;                    // https://cdn.nicevod.com/<userId>_<uuid>_<file>
 
     // DB 기록
     const { error } = await supabase.from('signatures').insert({
-      file_name: file.name,
-      file_url: publicUrl,
+      file_name: base,                                  // ✅ 원본 파일명만 저장
+      file_url: publicUrl,                              // ✅ cdn 도메인 URL 저장
       file_type: type,
       user_id: user.value.id,
     });
