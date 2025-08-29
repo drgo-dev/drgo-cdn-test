@@ -104,6 +104,13 @@
   });
     if (error) throw error;
 
+    // 업로드 성공 후 미리보기 URL을 해당 ref 변수에 할당합니다.
+    if (type === 'image') {
+      imageUrl.value = publicUrl;
+    } else if (type === 'audio') {
+      audioUrl.value = publicUrl;
+    }
+
     alert('업로드 성공!');
     await fetchSignatures();
   } catch (error) {
