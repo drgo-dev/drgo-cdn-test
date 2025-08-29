@@ -63,35 +63,46 @@ const handleFileUpload = async (event, type) => {
   const file = event.target.files[0];
   if (!file) return;
 
+  // (선택) 오디오 제한
+  const ALLOWED_AUDIO_TYPES = new Set(['audio/mpeg', 'audio/wav']);
+  const MAX_SIZE = 6 * 1024 * 1024; // 6MB
+  if (type === 'audio' && !ALLOWED_AUDIO_TYPES.has(file.type)) {
+    alert('오디오는 mp3/wav만 업로드할 수 있습니다.');
+    event.target.value = '';
+    return;
+  }
+  if (file.size > MAX_SIZE) {
+    alert('파일은 최대 6MB까지 업로드할 수 있습니다.');
+    event.target.value = '';
+    return;
+  }
+
+  // 루트에 파일명 그대로 저장 (중복 덮어쓰기 주의)
+  const base = file.name.split('/').pop();
+  const key  = base;
+
   isLoading.value = true;
   try {
-    // 1. 서버(/api/upload)에 FormData 업로드
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('key', key);
 
-    const ext = file.name.includes('.') ? file.name.split('.').pop() : 'bin'
-    const base = file.name.split('/').pop() // 경로 제거
-    const key  = base
-
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('key', key)                 // 서버에서 sanitize 하니 안전
-    await fetch('/api/upload', { method:'POST', body: fd })
-
+    // ✅ 단 한 번만 호출
     const res = await fetch('/api/upload', { method: 'POST', body: fd });
     const out = await res.json();
     if (!res.ok || !out.ok) throw new Error(out.error || '업로드 실패');
 
-    const publicUrl = out.publicUrl; // ✅ nicevod.com 기반 URL
+    const publicUrl = out.publicUrl; // https://cdn.nicevod.com/<파일명>
 
-    // 2. DB에 기록
+    // DB 기록
     const { error } = await supabase.from('signatures').insert({
       file_name: file.name,
-      file_url: out.publicUrl,   // ✅ 여기서 nicevod.com 기준 URL 저장
+      file_url: publicUrl,
       file_type: type,
       user_id: user.value.id,
     });
     if (error) throw error;
 
-    // 3. 상태 갱신
     if (type === 'image') imageUrl.value = publicUrl;
     if (type === 'audio') audioUrl.value = publicUrl;
 
@@ -102,7 +113,7 @@ const handleFileUpload = async (event, type) => {
     alert(`오류가 발생했습니다: ${err.message}`);
   } finally {
     isLoading.value = false;
-    event.target.value = ''; // 같은 파일 다시 선택할 수 있도록 초기화
+    event.target.value = '';
   }
 };
 
@@ -147,26 +158,25 @@ const handleFileUpload = async (event, type) => {
     isLoading.value = false;
   }
 };*/
-
 const handleDelete = async (signature) => {
   if (!confirm(`'${signature.file_name}' 파일을 정말 삭제하시겠습니까?`)) return;
 
   isLoading.value = true;
   try {
-    // ✅ URL → key (path 전체). 예: https://cdn/ uploads/signature/xxx.png
-    let key = signature.file_url
+    let key = signature.file_url;
     try {
-      const u = new URL(signature.file_url)
-      key = decodeURIComponent(u.pathname.replace(/^\//,''))
+      const u = new URL(signature.file_url);
+      key = decodeURIComponent(u.pathname.replace(/^\//, ''));
     } catch {
-      key = signature.file_url.replace(/^\//,'')
+      key = signature.file_url.replace(/^\//, '');
     }
-    await fetch('/api/delete', {
+
+    // ✅ 응답을 변수에 담아서 검사
+    const response = await fetch('/api/delete', {
       method: 'POST',
       headers: { 'Content-Type':'application/json' },
       body: JSON.stringify({ key }),
-    })
-
+    });
     if (!response.ok) throw new Error('R2에서 파일 삭제를 실패했습니다.');
 
     const { error } = await supabase.from('signatures').delete().eq('id', signature.id);
@@ -181,7 +191,6 @@ const handleDelete = async (signature) => {
     isLoading.value = false;
   }
 };
-
 
 
 /*const handleDelete = async (signature) => {
@@ -263,8 +272,8 @@ onMounted(() => {
       </div>
       <div v-else class="signature-grid">
         <div v-for="sig in signatures" :key="sig.id" class="signature-item">
-          <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" class="list-preview" />
-          <audio v-else-if="sig.file_type === 'audio'" :src="sig.file_url" controls class="list-preview"></audio>
+          <img v-if="sig.file_type === 'image'" :src="normalizeUrl(sig.file_url)" :alt="sig.file_name" class="list-preview" />
+          <audio v-else-if="sig.file_type === 'audio'" :src="normalizeUrl(sig.file_url)" controls class="list-preview"></audio>
           <div class="item-info">
             <p class="file-name" :title="sig.file_name">{{ sig.file_name }}</p>
             <button @click="copyUrl(sig.file_url)" class="btn-copy">링크 복사</button>
