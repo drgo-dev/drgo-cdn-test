@@ -9,10 +9,23 @@ const user = ref(null);
 const statusMessage = ref('사용자 정보를 확인 중입니다...');
 const signatures = ref([]); // 1. 업로드된 파일 목록을 저장할 배열 추가
 
+const copyUrl = (url) => {
+  if (!url) {
+    alert('복사할 URL이 없습니다.');
+    return;
+  }
+  navigator.clipboard.writeText(url).then(() => {
+    alert('클립보드에 URL이 복사되었습니다!');
+  }).catch(err => {
+    console.error('클립보드 복사 실패:', err);
+    alert('URL 복사에 실패했습니다.');
+  });
+};
 
-onMounted(() => {
+  onMounted(() => {
   checkUser();
 });
+
 
 // 2. 파일 목록을 불러오는 함수 새로 추가
 const fetchSignatures = async () => {

@@ -7,22 +7,46 @@ const user = ref(null);
 const profile = ref(null);
 const router = useRouter();
 
+// 1. 프로필을 불러오는 로직을 별도의 async 함수로 분리합니다.
+const loadProfile = async (currentUser) => {
+  try {
+    const { data } = await supabase
+        .from('profiles')
+        .select('nickname, grade')
+        .eq('id', currentUser.id)
+        .single();
+    profile.value = data;
+  } catch (error) {
+    console.error('프로필 로딩 중 에러:', error);
+    profile.value = null;
+  }
+};
+
 const handleLogout = async () => {
   try {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    await supabase.auth.signOut();
+    profile.value = null; // 로그아웃 시 프로필 정보도 비웁니다.
     router.push('/');
   } catch (error) {
     console.error('로그아웃 에러:', error);
   }
 };
 
-// onAuthStateChange 리스너만 활성화합니다.
-// 안쪽 로직은 최소화하여 콘솔에 로그만 찍도록 합니다.
 onMounted(() => {
+  // 2. onAuthStateChange는 상태 변경만 담당하고, 분리된 함수를 호출합니다.
   supabase.auth.onAuthStateChange((event, session) => {
-    console.log('Supabase Auth Event:', event, session); // 인증 이벤트를 콘솔에서 확인
-    user.value = session?.user || null;
+    const currentUser = session?.user || null;
+    user.value = currentUser;
+
+    if (currentUser) {
+      loadProfile(currentUser);
+    } else {
+      profile.value = null;
+    }
+
+    if (event === 'SIGNED_IN' && router.currentRoute.value.name === 'login') {
+      router.push('/signature');
+    }
   });
 });
 </script>
@@ -33,7 +57,7 @@ onMounted(() => {
       <router-link to="/" class="brand">Dr.Go CDN</router-link>
       <div class="nav-links">
         <template v-if="user">
-          <span>{{ profile?.nickname || user.email }}</span>
+          <span>{{ profile?.nickname || user.email }} ({{ profile.grade }} 등급)</span>
           <router-link to="/mypage">마이페이지</router-link>
           <router-link to="/signature">시그니처</router-link>
           <button @click="handleLogout" class="logout-button">로그아웃</button>
