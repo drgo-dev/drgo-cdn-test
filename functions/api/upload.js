@@ -1,6 +1,7 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 
+// Cloudflare Pages Functions - R2 바인딩 업로드
 const cors = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -13,34 +14,31 @@ export async function onRequestOptions() {
 
 export async function onRequestPost({ request, env }) {
     try {
-        const { name, contentType } = await request.json()
-        if (!name || !contentType) {
-            return json({ error: 'name/contentType required' }, 400)
+        // ✅ FormData 받기
+        const form = await request.formData()
+        const file = form.get('file')
+        let key = form.get('key') || ''
+
+        if (!file || !file.name) return json({ error: 'file is required' }, 400)
+        if (!key) return json({ error: 'key is required' }, 400)
+
+        if (key.startsWith('/')) key = key.slice(1)
+        const contentType = String(file.type || 'application/octet-stream')
+
+        // 6MB 제한
+        if ((file.size ?? 0) > 6 * 1024 * 1024) {
+            return json({ error: '파일은 최대 6MB까지 업로드할 수 있습니다.' }, 413)
         }
 
-        const s3 = new S3Client({
-            region: "auto",
-            endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-            credentials: {
-                accessKeyId: env.R2_ACCESS_KEY_ID,
-                secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-            },
+        // R2 업로드
+        await env.MY_BUCKET.put(key, file.stream(), {
+            httpMetadata: { contentType },
         })
 
-        const key = `uploads/signature/${crypto.randomUUID()}-${name}`
+        const publicBase = env.R2_PUBLIC_URL || ''
+        const publicUrl = publicBase ? `${publicBase}/${key}` : null
 
-        const uploadUrl = await getSignedUrl(
-            s3,
-            new PutObjectCommand({
-                Bucket: env.R2_BUCKET_NAME,
-                Key: key,
-                ContentType: contentType,
-            }),
-            { expiresIn: 600 }
-        )
-
-        const publicUrl = `${env.R2_PUBLIC_URL}/${key}`
-        return json({ uploadUrl, publicUrl, key })
+        return json({ ok: true, key, publicUrl })
     } catch (e) {
         return json({ error: String(e) }, 500)
     }
@@ -52,6 +50,7 @@ function json(data, status = 200) {
         headers: { 'Content-Type': 'application/json', ...cors },
     })
 }
+
 
 
 
