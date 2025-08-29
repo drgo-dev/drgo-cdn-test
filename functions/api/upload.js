@@ -1,51 +1,29 @@
-
 // Cloudflare Pages Functions - R2 바인딩 업로드 (FormData)
-// 바인딩 이름: MY_BUCKET  (Pages → Settings → Functions → Bindings)
+// 바인딩 이름: MY_BUCKET  / 공개 도메인: https://cdn.nicevod.com
 
 const cors = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': '*', // 필요시 도메인으로 제한
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }
-const ALLOWED_TYPES = new Set([
-    'image/png','image/jpeg','image/gif','image/webp','image/svg+xml',
-    'audio/mpeg','audio/wav'
-])
 
-const MAX_SIZE = 6 * 1024 * 1024 // 6MB
-const BASE_DOMAIN = 'https://cdn.nicevod.com' // 복사용 퍼블릭 도메인
-
-function sanitizeBaseName(name) {
-    // 경로 제거 (슬래시 금지), 공백 트림
-    const justName = name.split('/').pop().trim()
-    if (!justName) return `${crypto.randomUUID()}.bin`
-    return justName || `file-${crypto.randomUUID()}`
-}
-
-// R2 바인딩 업로드 (FormData). 바인딩 이름: MY_BUCKET
-const cors = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-}
 const ALLOWED_TYPES = new Set([
     'image/png','image/jpeg','image/gif','image/webp','image/svg+xml',
     'audio/mpeg','audio/wav',
 ])
-const MAX_SIZE   = 6 * 1024 * 1024
-const BASE_DOMAIN = 'https://cdn.nicevod.com'
+
+const MAX_SIZE = 6 * 1024 * 1024 // 6MB
+const BASE_DOMAIN = 'https://cdn.nicevod.com' // 복사에 쓰일 도메인
 
 function sanitizeBaseName(name) {
-    // 경로 제거 + 공백→_ + 너무 긴 이름 컷
-    let n = (name || '').split('/').pop().trim().replace(/\s+/g, '_')
+    // 경로 제거 + 공백→_ + 너무 긴 이름 컷 + 슬래시 금지
+    let n = String(name || '').split('/').pop().trim().replace(/\s+/g, '_')
     if (!n) n = `${crypto.randomUUID()}.bin`
-    // 파일명 길이 제한 (R2는 1024 가능하지만 URL/DB 고려)
     if (n.length > 180) {
         const parts = n.split('.')
         const ext = parts.length > 1 ? '.' + parts.pop() : ''
         n = n.slice(0, 180 - ext.length) + ext
     }
-    // 슬래시는 금지 (루트 저장)
     return n.replace(/\//g, '_')
 }
 
@@ -60,15 +38,16 @@ export async function onRequestPost({ request, env }) {
         const userId = (form.get('user_id') || '').toString()
 
         if (!file || !file.name) return json({ error: 'file is required' }, 400)
+
         const ct = String(file.type || '')
         if (!ALLOWED_TYPES.has(ct)) return json({ error: 'Only images/mp3/wav' }, 415)
         if ((file.size ?? 0) > MAX_SIZE) return json({ error: 'Max 6MB' }, 413)
 
         const safeName = sanitizeBaseName(file.name)
 
-        // ✅ 개인화 + 중복방지 키
-        const prefix   = userId ? `${userId}_` : ''
-        const key      = `${prefix}${crypto.randomUUID()}_${safeName}`
+        // 개인화 + 충돌 방지: <userId>_<uuid>_<원본파일명>
+        const prefix = userId ? `${userId}_` : ''
+        const key = `${prefix}${crypto.randomUUID()}_${safeName}`
 
         await env.MY_BUCKET.put(key, file.stream(), {
             httpMetadata: { contentType: ct },
@@ -83,7 +62,8 @@ export async function onRequestPost({ request, env }) {
 
 function json(data, status = 200) {
     return new Response(JSON.stringify(data), {
-        status, headers: { 'Content-Type': 'application/json', ...cors },
+        status,
+        headers: { 'Content-Type': 'application/json', ...cors },
     })
 }
 
