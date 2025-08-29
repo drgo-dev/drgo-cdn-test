@@ -11,6 +11,13 @@ const profile = ref(null);
 const statusMessage = ref('사용자 정보를 확인 중입니다...');
 const signatures = ref([]);
 
+const { error } = await supabase.from('signatures').insert({
+  file_name: file.name,
+  file_url: publicUrl,   // ✅ 여기서 nicevod.com 기준 URL 저장
+  file_type: type,
+  user_id: user.value.id,
+});
+
 // --- 함수 ---
 const copyUrl = (url) => {
   if (!url) return alert('복사할 URL이 없습니다.');
@@ -242,10 +249,10 @@ onMounted(() => {
 
     <div class="upload-section">
       <div class="upload-box">
-        <h3>알림 이미지</h3>
+        <h3>이미지</h3>
         <div class="preview-area">
           <img v-if="imageUrl" :src="imageUrl" alt="이미지 미리보기" class="image-preview" />
-          <div v-else class="placeholder">이미지 미리보기</div>
+          <div v-else class="placeholder">미리 보기</div>
         </div>
         <div class="button-group">
           <input type="file" @change="handleFileUpload($event, 'image')" accept="image/*" id="image-upload" style="display:none" :disabled="!user || !profile || profile.grade === 'D'" />
@@ -253,10 +260,10 @@ onMounted(() => {
         </div>
       </div>
       <div class="upload-box">
-        <h3>알림음</h3>
+        <h3>음원</h3>
         <div class="preview-area">
           <audio v-if="audioUrl" :src="audioUrl" controls class="audio-preview"></audio>
-          <div v-else class="placeholder">사운드 사용안함</div>
+          <div v-else class="placeholder">미리 듣기</div>
         </div>
         <div class="button-group">
           <input type="file" @change="handleFileUpload($event, 'audio')" accept="audio/*" id="audio-upload" style="display:none" :disabled="!user || !profile || profile.grade === 'D'" />
@@ -314,7 +321,7 @@ onMounted(() => {
 .signature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
 .signature-item { border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: transform 0.3s ease, box-shadow 0.3s ease; }
 .signature-item:hover { transform: translateY(-5px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-.list-preview { width: 100%; height: 180px; object-fit: cover; background-color: #f0f0f0; }
+.list-preview { width: 100%; height: 180px; object-fit: contain; background-color: #f0f0f0; }
 audio.list-preview { object-fit: initial; }
 .item-info { padding: 15px; display: flex; flex-direction: column; gap: 8px; }
 .file-name { font-weight: 600; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
