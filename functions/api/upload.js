@@ -45,9 +45,13 @@ export async function onRequestPost({ request, env }) {
 
         const safeName = sanitizeBaseName(file.name)
 
-        // 개인화 + 충돌 방지: <userId>_<uuid>_<원본파일명>
+        const ext = safeName.includes('.') ? '.' + safeName.split('.').pop() : ''
+        const shortId = crypto.randomUUID().split('-')[0]   // 8자리 정도
+        const key = `${userId}_${shortId}${ext}`
+
+       /* // 개인화 + 충돌 방지: <userId>_<uuid>_<원본파일명>
         const prefix = userId ? `${userId}_` : ''
-        const key = `${prefix}${crypto.randomUUID()}_${safeName}`
+        const key = `${prefix}${crypto.randomUUID()}_${safeName}`*/
 
         await env.MY_BUCKET.put(key, file.stream(), {
             httpMetadata: { contentType: ct },
