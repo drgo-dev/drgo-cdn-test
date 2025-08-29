@@ -151,6 +151,43 @@ const handleDelete = async (signature) => {
 
   isLoading.value = true;
   try {
+    // ✅ URL → key (path 전체). 예: https://cdn/ uploads/signature/xxx.png
+    let key = signature.file_url;
+    try {
+      const u = new URL(signature.file_url);
+      key = u.pathname.startsWith('/') ? u.pathname.slice(1) : u.pathname;
+    } catch {
+      // file_url이 절대 URL이 아닐 경우 대비: 앞의 "/" 제거 정도만
+      key = key.startsWith('/') ? key.slice(1) : key;
+    }
+
+    const response = await fetch('/api/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
+    if (!response.ok) throw new Error('R2에서 파일 삭제를 실패했습니다.');
+
+    const { error } = await supabase.from('signatures').delete().eq('id', signature.id);
+    if (error) throw error;
+
+    alert('파일이 성공적으로 삭제되었습니다.');
+    await fetchSignatures();
+  } catch (error) {
+    console.error('삭제 중 에러 발생:', error);
+    alert(`오류가 발생했습니다: ${error.message}`);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+
+
+/*const handleDelete = async (signature) => {
+  if (!confirm(`'${signature.file_name}' 파일을 정말 삭제하시겠습니까?`)) return;
+
+  isLoading.value = true;
+  try {
     const fileKey = signature.file_url.split('/').pop();
     const response = await fetch('/api/delete', {
       method: 'POST',
@@ -170,7 +207,7 @@ const handleDelete = async (signature) => {
   } finally {
     isLoading.value = false;
   }
-};
+};*/
 
 // --- 생명주기 훅 ---
 onMounted(() => {
