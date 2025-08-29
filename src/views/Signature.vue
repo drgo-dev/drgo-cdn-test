@@ -94,7 +94,43 @@
     body: file,
     headers: { 'Content-Type': file.type },
   });
-    if (!uploadResponse.ok) throw new Error('R2에 파일 업로드 실패');
+    // 파일 삭제 함수를 실제 기능으로 수정합니다.
+    const handleDelete = async (signature) => {
+      // 사용자에게 정말 삭제할 것인지 확인받습니다.
+      if (!confirm(`'${signature.file_name}' 파일을 정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
+        return;
+      }
+
+      isLoading.value = true;
+      try {
+        // 1. R2에서 실제 파일 삭제 요청
+        const fileKey = signature.file_url.split('/').pop(); // URL에서 파일 키(이름) 추출
+        const response = await fetch('/api/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: fileKey }),
+        });
+        if (!response.ok) throw new Error('R2에서 파일 삭제를 실패했습니다.');
+
+        // 2. Supabase에서 데이터 정보 삭제
+        const { error } = await supabase
+            .from('signatures')
+            .delete()
+            .eq('id', signature.id);
+        if (error) throw error;
+
+        alert('파일이 성공적으로 삭제되었습니다.');
+        await fetchSignatures(); // 목록 새로고침
+
+      } catch (error) {
+        console.error('삭제 중 에러 발생:', error);
+        alert(`오류가 발생했습니다: ${error.message}`);
+      } finally {
+        isLoading.value = false;
+      }
+    };
+
+      if (!uploadResponse.ok) throw new Error('R2에 파일 업로드 실패');
 
     const { error } = await supabase.from('signatures').insert({
     file_name: file.name,
@@ -179,14 +215,12 @@
       <div v-if="signatures.length === 0 && user" class="empty-list">
         업로드한 파일이 없습니다.
       </div>
-      <div v-else class="signature-grid">
+      <div class="signature-grid">
         <div v-for="sig in signatures" :key="sig.id" class="signature-item">
-          <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" class="list-preview" />
-          <audio v-else-if="sig.file_type === 'audio'" :src="sig.file_url" controls class="list-preview"></audio>
-
           <div class="item-info">
             <p class="file-name">{{ sig.file_name }}</p>
             <button @click="copyUrl(sig.file_url)" class="btn-copy">링크 복사</button>
+            <button @click="handleDelete(sig)" class="btn-delete-item">삭제</button>
           </div>
         </div>
       </div>
@@ -266,4 +300,28 @@ audio.list-preview { object-fit: initial; }
 /* 링크 복사 버튼 */
 .btn-copy { padding: 8px 12px; border: 1px solid #007bff; background-color: #fff; color: #007bff; border-radius: 5px; cursor: pointer; font-weight: 500; transition: background-color 0.2s, color 0.2s; width: 100%; }
 .btn-copy:hover { background-color: #007bff; color: #fff; }
+/* ... 기존 스타일 코드 맨 아래에 추가 ... */
+
+.item-info {
+  /* ... 기존 item-info 스타일 ... */
+  gap: 8px; /* 버튼 사이 간격 추가 */
+}
+
+/* 목록 안의 삭제 버튼 스타일 */
+.btn-delete-item {
+  padding: 8px 12px;
+  border: 1px solid #dc3545;
+  background-color: #fff;
+  color: #dc3545;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s, color 0.2s;
+  width: 100%;
+}
+
+.btn-delete-item:hover {
+  background-color: #dc3545;
+  color: #fff;
+}
 </style>
