@@ -1,4 +1,30 @@
-import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
+// functions/api/delete.js
+const cors = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+export async function onRequestOptions() {
+    return new Response(null, { headers: cors })
+}
+
+export async function onRequestPost({ request, env }) {
+    const { key } = await request.json()
+    if (!key) return json({ error: 'key is required' }, 400)
+
+    const k = key.startsWith('/') ? key.slice(1) : key
+    await env.MY_BUCKET.delete(k)   // ← 바인딩으로 바로 삭제
+    return json({ ok: true })
+}
+
+function json(body, status = 200) {
+    return new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json', ...cors },
+    })
+}
+/*
 
 export async function onRequestPost({ request, env }) {
     try {
@@ -21,7 +47,7 @@ export async function onRequestPost({ request, env }) {
         // 3. R2에서 객체(파일) 삭제 명령을 실행합니다.
         await s3.send(
             new DeleteObjectCommand({
-                Bucket: env.MY_BUCKET,
+                Bucket: env.R2_BUCKET_NAME,
                 Key: key,
             })
         );
@@ -35,4 +61,4 @@ export async function onRequestPost({ request, env }) {
         console.error("R2 파일 삭제 에러:", error);
         return new Response("파일 삭제 중 서버에서 오류가 발생했습니다.", { status: 500 });
     }
-}
+}*/
