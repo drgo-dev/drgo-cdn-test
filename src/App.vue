@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './lib/supabaseClient.js'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
