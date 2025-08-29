@@ -463,6 +463,6 @@ audio.list-preview {
 
 .btn-copy:hover {
   background-color: #007bff;
-  color: #fff;
+  color: #000;
 }
 </style>
