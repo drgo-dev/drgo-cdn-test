@@ -65,10 +65,10 @@
 
     // 파일 업로드 처리 함수
     const handleFileUpload = async (event, type) => {
-    if (!user.value) {
-    alert('로그인이 필요합니다.');
-    return;
-  }
+      if (!user.value || !profile.value) { // !profile.value 체크 추가
+        alert('사용자 정보가 로딩 중입니다. 잠시 후 다시 시도해주세요.');
+        return;
+      }
     // D등급 사용자는 업로드 불가
     if (profile.value?.grade === 'D') {
     alert('D등급 사용자는 파일을 업로드할 수 없습니다.');
@@ -190,9 +190,9 @@
           <div v-else class="placeholder">이미지 미리보기</div>
         </div>
         <div class="button-group">
-          <input type="file" @change="handleFileUpload($event, 'image')" accept="image/*" id="image-upload" style="display:none" :disabled="!user || profile?.grade === 'D'" />
-          <label for="image-upload" class="btn" :class="{ disabled: !user || profile?.grade === 'D' }">파일 선택</label>
-          <button v-if="imageUrl" @click="deleteFile('image')" class="btn-delete">파일 삭제</button>
+          <input type="file" @change="handleFileUpload($event, 'image')" id="image-upload" style="display:none"
+                 :disabled="!user || !profile || profile.grade === 'D'" />
+          <label for="image-upload" class="btn" :class="{ disabled: !user || !profile || profile.grade === 'D' }">파일 선택</label>
         </div>
       </div>
 
@@ -203,9 +203,9 @@
           <div v-else class="placeholder">사운드 사용안함</div>
         </div>
         <div class="button-group">
-          <input type="file" @change="handleFileUpload($event, 'audio')" accept="audio/*" id="audio-upload" style="display:none" :disabled="!user || profile?.grade === 'D'" />
-          <label for="audio-upload" class="btn" :class="{ disabled: !user || profile?.grade === 'D' }">파일 선택</label>
-          <button v-if="audioUrl" @click="deleteFile('audio')" class="btn-delete">파일 삭제</button>
+          <input type="file" @change="handleFileUpload($event, 'audio')" id="audio-upload" style="display:none"
+                 :disabled="!user || !profile || profile.grade === 'D'" />
+          <label for="audio-upload" class="btn" :class="{ disabled: !user || !profile || profile.grade === 'D' }">파일 선택</label>
         </div>
       </div>
     </div>
