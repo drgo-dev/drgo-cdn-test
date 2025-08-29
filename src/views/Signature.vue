@@ -58,6 +58,59 @@ const handleFileUpload = async (event, type) => {
 
   const file = event.target.files[0];
   if (!file) return;
+  if (file.size > 6 * 1024 * 1024) {
+    alert('6MB 이하만 업로드할 수 있습니다.');
+    return;
+  }
+
+  // 업로드 키(버킷 내부 경로) 생성
+  const ext = file.name.includes('.') ? file.name.split('.').pop() : 'bin';
+  const key = `uploads/signature/${crypto.randomUUID()}.${ext}`;
+
+  isLoading.value = true;
+  try {
+    // ✅ FormData 로 서버에 바로 업로드 (presigned URL 단계 없음)
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('key', key);
+
+    const res = await fetch('/api/upload', { method: 'POST', body: fd });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) throw new Error(out.error || '업로드 실패');
+
+    const publicUrl = out.publicUrl ?? out.key; // 서버가 publicUrl 주면 사용
+
+    // DB 기록
+    const { error } = await supabase.from('signatures').insert({
+      file_name: file.name,
+      file_url: publicUrl || `/${key}`, // publicUrl 없으면 키만 저장해도 OK
+      file_type: type,
+      user_id: user.value.id,
+    });
+    if (error) throw error;
+
+    if (type === 'image') imageUrl.value = publicUrl;
+    if (type === 'audio') audioUrl.value = publicUrl;
+
+    alert('업로드 성공!');
+    await fetchSignatures();
+  } catch (err) {
+    console.error('업로드 과정 중 에러 발생:', err);
+    alert(`오류가 발생했습니다: ${err.message}`);
+  } finally {
+    isLoading.value = false;
+    // 같은 파일 다시 선택 가능하도록 input 초기화
+    event.target.value = '';
+  }
+};
+
+/*
+const handleFileUpload = async (event, type) => {
+  if (!user.value || !profile.value) return alert('사용자 정보가 로딩 중입니다.');
+  if (profile.value.grade === 'D') return alert('D등급 사용자는 파일을 업로드할 수 없습니다.');
+
+  const file = event.target.files[0];
+  if (!file) return;
 
   isLoading.value = true;
   try {
@@ -91,7 +144,7 @@ const handleFileUpload = async (event, type) => {
   } finally {
     isLoading.value = false;
   }
-};
+};*/
 
 const handleDelete = async (signature) => {
   if (!confirm(`'${signature.file_name}' 파일을 정말 삭제하시겠습니까?`)) return;

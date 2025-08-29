@@ -1,3 +1,61 @@
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
+
+const cors = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+export async function onRequestOptions() {
+    return new Response(null, { headers: cors })
+}
+
+export async function onRequestPost({ request, env }) {
+    try {
+        const { name, contentType } = await request.json()
+        if (!name || !contentType) {
+            return json({ error: 'name/contentType required' }, 400)
+        }
+
+        const s3 = new S3Client({
+            region: "auto",
+            endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+            credentials: {
+                accessKeyId: env.R2_ACCESS_KEY_ID,
+                secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+            },
+        })
+
+        const key = `uploads/signature/${crypto.randomUUID()}-${name}`
+
+        const uploadUrl = await getSignedUrl(
+            s3,
+            new PutObjectCommand({
+                Bucket: env.R2_BUCKET_NAME,
+                Key: key,
+                ContentType: contentType,
+            }),
+            { expiresIn: 600 }
+        )
+
+        const publicUrl = `${env.R2_PUBLIC_URL}/${key}`
+        return json({ uploadUrl, publicUrl, key })
+    } catch (e) {
+        return json({ error: String(e) }, 500)
+    }
+}
+
+function json(data, status = 200) {
+    return new Response(JSON.stringify(data), {
+        status,
+        headers: { 'Content-Type': 'application/json', ...cors },
+    })
+}
+
+
+
+/*
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -37,4 +95,4 @@ export async function onRequestPost({ request, env }) {
     return new Response(JSON.stringify({ uploadUrl, publicUrl }), {
         headers: { "Content-Type": "application/json" },
     });
-}
+}*/
