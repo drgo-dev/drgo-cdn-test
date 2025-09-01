@@ -120,8 +120,39 @@ const handleDelete = async (signature) => {
       <div class="upload-section">
       </div>
       <div class="list-section">
-        <h2>내 시그니처 목록</h2>
-        <div class="tabs">
+        <div class="list-section">
+          <h2>내 시그니처 목록</h2>
+
+          <div class="tabs">
+            <button @click="activeTab = 'all'" :class="{ active: activeTab === 'all' }">전체</button>
+            <button @click="activeTab = 'image'" :class="{ active: activeTab === 'image' }">이미지</button>
+            <button @click="activeTab = 'audio'" :class="{ active: activeTab === 'audio' }">오디오</button>
+          </div>
+
+          <div class="signature-list-container">
+            <div v-if="signatures.length === 0" class="empty-list">
+              업로드한 파일이 없습니다.
+            </div>
+            <div v-else>
+              <div v-for="sig in filteredSignatures" :key="sig.id" class="list-item">
+                <div class="item-thumbnail">
+                  <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" />
+                  <span v-else class="audio-icon">🎵</span>
+                  <div v-if="sig.file_type === 'image'" class="thumbnail-preview">
+                    <img :src="sig.file_url" :alt="sig.file_name" />
+                  </div>
+                </div>
+                <div class="item-name" :title="sig.file_name">
+                  {{ sig.file_name }}
+                </div>
+                <div class="item-actions">
+                  <button @click="copyUrl(sig.file_url)" class="btn-icon" title="링크 복사">📋</button>
+                  <button @click="downloadFile(sig.file_url, sig.file_name)" class="btn-icon" title="다운로드">💾</button>
+                  <button @click="handleDelete(sig)" class="btn-icon btn-icon-delete" title="삭제">🗑️</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="signature-list-container">
         </div>
