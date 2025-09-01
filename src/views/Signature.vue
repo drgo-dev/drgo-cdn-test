@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { supabase } from '../lib/supabaseClient';
 
 const props = defineProps({
@@ -17,12 +17,27 @@ const statusMessage = ref('사용자 정보를 확인 중입니다...');
 const signatures = ref([]);
 const activeTab = ref('all');
 
-const filteredSignatures = computed(() => {
-  if (activeTab.value === 'all') {
-    return signatures.value;
+// props.profile이 준비되거나 변경될 때마다 파일 목록을 다시 불러옵니다.
+watch(() => props.profile, (newProfile) => {
+  if (newProfile?.id) {
+    statusMessage.value = '';
+    fetchSignatures(newProfile.id);
+  } else {
+    signatures.value = []; // 로그아웃 시 목록 비우기
+    statusMessage.value = '기능을 사용하려면 로그인이 필요합니다.';
   }
-  return signatures.value.filter(sig => sig.file_type === activeTab.value);
-});
+}, { immediate: true });
+
+const fetchSignatures = async (userId) => {
+  if (!userId) return;
+  try {
+    const { data, error } = await supabase.from('signatures').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+    if (error) throw error;
+    signatures.value = data;
+  } catch (error) {
+    console.error('파일 목록 로딩 에러:', error);
+  }
+};
 
 const downloadFile = (url, filename) => {
   // ❗️ 다운로드 전에 URL을 완전한 형태로 변환합니다.
@@ -51,16 +66,6 @@ const copyUrl = (url) => {
   navigator.clipboard.writeText(url).then(() => alert('클립보드에 URL이 복사되었습니다!'));
 };
 
-const fetchSignatures = async () => {
-  if (!user.value) return;
-  try {
-    const { data, error } = await supabase.from('signatures').select('*').eq('user_id', user.value.id).order('created_at', { ascending: false });
-    if (error) throw error;
-    signatures.value = data;
-  } catch (error) {
-    console.error('파일 목록 로딩 에러:', error);
-  }
-};
 
 const checkUser = async () => {
   const {data: {user: currentUser}} = await supabase.auth.getUser();

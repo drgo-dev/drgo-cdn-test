@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
-import { supabase } from '@/lib/supabaseClient'; // 경로 확인: 보통 './lib/supabaseClient'
+import { supabase } from './lib/supabaseClient'; // 경로가 @/ 가 아닐 경우 ./lib/supabaseClient 로 수정
 import { useRouter, RouterView, RouterLink } from 'vue-router';
 
 const router = useRouter();
@@ -8,18 +8,21 @@ const user = ref(null);
 const profile = ref(null); // profile은 null로 시작하는 것이 더 안전합니다.
 let authListener = null;
 
+// 프로필 정보를 불러오는 통합 함수
 const loadProfile = async (currentUser) => {
   if (!currentUser?.id) {
     profile.value = null;
     return;
   }
   try {
-    // ❗️ select() 부분에 storage_used를 추가합니다.
-    const { data } = await supabase
+    // 필요한 모든 프로필 정보를 한 번에 불러옵니다.
+    const { data, error } = await supabase
         .from('profiles')
-        .select('nickname, grade, storage_used') // storage_used 추가
+        .select('nickname, grade, broadcast_platform, broadcast_id, storage_used')
         .eq('id', currentUser.id)
         .single();
+
+    if (error) throw error;
     profile.value = data;
   } catch (error) {
     console.error('프로필 로딩 중 에러:', error);
@@ -67,13 +70,21 @@ onMounted(async () => {
   authListener = data.subscription;
 
   // 다른 페이지(Signature.vue)에서 파일 용량이 변경되었을 때 알림을 받아 프로필을 새로고침합니다.
-  window.addEventListener('storage-changed', () => loadProfile(user.value));
+  window.addEventListener('storage-changed', () => {
+    if (user.value) {
+      loadProfile(user.value)
+    }
+  });
 });
 
 // 컴포넌트가 파괴되기 직전에 리스너를 정리합니다.
 onBeforeUnmount(() => {
   authListener?.unsubscribe();
-  window.removeEventListener('storage-changed', () => loadProfile(user.value));
+  window.removeEventListener('storage-changed', () => {
+    if(user.value){
+      loadProfile(user.value)
+    }
+  });
 });
 </script>
 
@@ -84,6 +95,22 @@ onBeforeUnmount(() => {
       <div class="nav-links">
         <template v-if="user && profile">
           <span>{{ profile.nickname || user.email }} ({{ profile.grade }} 등급)</span>
+
+          <div class="storage-gauge" title="사용량">
+            <div class="gauge-bar">
+              <div class="gauge-fill" :style="{ width: `${(profile.storage_used / (300 * 1024 * 1024)) * 100}%` }"></div>
+            </div>
+            <div class="gauge-text">
+              {{ (profile.storage_used / (1024 * 1024)).toFixed(1) }} / 300 MB
+            </div>
+          </div>
+
+          <small v-if="profile.broadcast_platform && profile.broadcast_id" class="broadcast-info">
+            <img v-if="profile.broadcast_platform === 'chzzk'" src="@/assets/icons/chzzk.png" alt="치지직" class="platform-icon" />
+            <img v-else-if="profile.broadcast_platform === 'soop'" src="@/assets/icons/soop.png" alt="soop" class="platform-icon" />
+            <img v-else-if="profile.broadcast_platform === 'youtube'" src="@/assets/icons/youtube.png" alt="유튜브" class="platform-icon" />
+            {{ profile.broadcast_id }}
+          </small>
 
           <router-link to="/mypage">마이페이지</router-link>
           <router-link to="/signature">시그니처</router-link>
@@ -101,7 +128,6 @@ onBeforeUnmount(() => {
     <RouterView :profile="profile" />
   </main>
 </template>
-
 
 <style>
 /* 전역 스타일 */
@@ -132,4 +158,8 @@ main { padding: 20px; }
   font-size: 0.85rem;
   color: #555;
 }
+.storage-gauge { display: flex; align-items: center; gap: 8px; min-width: 200px; }
+.gauge-bar { width: 100%; height: 8px; background-color: #e9ecef; border-radius: 4px; overflow: hidden; }
+.gauge-fill { height: 100%; background-color: #007bff; border-radius: 4px; transition: width 0.5s ease; }
+.gauge-text { font-size: 0.8rem; color: #555; white-space: nowrap; }
 </style>
