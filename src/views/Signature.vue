@@ -98,12 +98,13 @@ const handleFileUpload = async (event, type) => {
     if (!uploadResponse.ok) throw new Error(result.error || '업로드에 실패했습니다.');
 
     const { publicUrl } = result;
+    const userId = props.profile.id;
 
     const { error: dbError } = await supabase.from('signatures').insert({
       file_name: file.name,
       file_url: publicUrl,
       file_type: type,
-      user_id: user.value.id,
+      user_id: userId,
       size: file.size, // ❗️ 이 줄이 있는지 확인해주세요.
     });
     if (dbError) throw dbError;
