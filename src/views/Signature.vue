@@ -170,12 +170,30 @@ const loadProfile = async (currentUser) => {
   }
 };
 </script>
-
 <template>
-
   <div class="uploader-container">
-    <div v-if="isLoading" class="loading-overlay"><div class="spinner"></div><p>처리 중입니다...</p></div>
-    <div class="header"><h1>시그니처 관리</h1></div>
+    <div v-if="isLoading" class="loading-overlay">
+      <div class="spinner"></div>
+      <p>처리 중입니다...</p>
+    </div>
+
+    <div class="header">
+      <h1>시그니처 관리</h1>
+    </div>
+
+    <div v-if="profile" class="storage-gauge-box">
+      <h3>내 사용량</h3>
+      <div class="storage-gauge">
+        <div class="gauge-bar">
+          <div class="gauge-fill" :style="{ width: `${(profile.storage_used / (300 * 1024 * 1024)) * 100}%` }"></div>
+        </div>
+        <div class="gauge-text">
+          {{ (profile.storage_used / (1024 * 1024)).toFixed(2) }} MB / 300 MB
+        </div>
+      </div>
+    </div>
+
+    <div v-if="statusMessage" class="status-box">{{ statusMessage }}</div>
 
     <div v-if="profile">
       <div class="upload-section">
@@ -204,8 +222,10 @@ const loadProfile = async (currentUser) => {
       </div>
 
       <div class="list-section">
-        <div v-if="signatures.length === 0" class="empty-list">업로드한 파일이 없습니다.</div>
-
+        <h2>내 시그니처 목록</h2>
+        <div v-if="signatures.length === 0" class="empty-list">
+          업로드한 파일이 없습니다.
+        </div>
         <div v-else class="signature-grid">
           <div v-for="sig in signatures" :key="sig.id" class="signature-item">
             <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" class="list-preview" :class="{ 'no-right-click': profile.grade === 'D' }" />
@@ -213,14 +233,13 @@ const loadProfile = async (currentUser) => {
             <div class="item-info">
               <p class="file-name" :title="sig.file_name">{{ sig.file_name }}</p>
               <button v-if="['A', 'B', 'C'].includes(profile.grade)" @click="copyUrl(sig.file_url)" class="btn-copy">링크 복사</button>
-              <button v-if="['A', 'B', 'C'].includes(profile.grade)" @click="downloadFile(sig.file_url, sig.file_name)" class="btn-download">다운로드</button>              <button @click="handleDelete(sig)" class="btn-delete-item">삭제</button>
+              <button v-if="['A', 'B', 'C'].includes(profile.grade)" @click="downloadFile(sig.file_url, sig.file_name)" class="btn-download">다운로드</button>
+              <button @click="handleDelete(sig)" class="btn-delete-item">삭제</button>
             </div>
           </div>
         </div>
       </div>
     </div>
-
-    <div v-else class="status-box">{{ statusMessage }}</div>
   </div>
 </template>
 
@@ -262,4 +281,21 @@ audio.list-preview { object-fit: initial; }
 .btn-download:hover { background-color: #28a745; color: #fff; }
 .btn-delete-item { border-color: #dc3545; color: #dc3545; }
 .btn-delete-item:hover { background-color: #dc3545; color: #fff; }
+.storage-gauge-box {
+  background-color: #f8f9fa;
+  padding: 20px 25px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+  border: 1px solid #e0e0e0;
+}
+.storage-gauge-box h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.2em;
+  color: #34495e;
+}
+.storage-gauge { display: flex; align-items: center; gap: 15px; }
+.gauge-bar { flex-grow: 1; height: 12px; background-color: #e9ecef; border-radius: 6px; overflow: hidden; }
+.gauge-fill { height: 100%; background-color: #007bff; border-radius: 6px; transition: width 0.5s ease; }
+.gauge-text { font-size: 1em; color: #333; font-weight: 500; white-space: nowrap; }
 </style>
