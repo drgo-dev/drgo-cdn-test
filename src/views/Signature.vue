@@ -2,33 +2,50 @@
 import { ref, watch, computed } from 'vue';
 import { supabase } from '../lib/supabaseClient';
 
+// --- Props ---
+// 부모(App.vue)로부터 profile 데이터를 props로 받습니다.
 const props = defineProps({
   profile: Object,
 });
 
-const signatures = ref([]);
+// --- 상태(State) 변수 ---
+const imageUrl = ref('');
+const audioUrl = ref('');
 const isLoading = ref(false);
 const statusMessage = ref('사용자 정보를 확인 중입니다...');
+const signatures = ref([]);
 const activeTab = ref('all');
 
+// --- Computed 속성 ---
+// 선택된 탭에 따라 목록을 필터링합니다.
 const filteredSignatures = computed(() => {
   if (activeTab.value === 'all') return signatures.value;
   return signatures.value.filter(sig => sig.file_type === activeTab.value);
 });
 
+// --- Watch (감시자) ---
+// 부모로부터 받은 profile 데이터가 변경될 때를 감지하여 동작합니다.
 watch(() => props.profile, (newProfile) => {
   if (newProfile?.id) {
     statusMessage.value = '';
-    fetchSignatures(newProfile.id);
+    fetchSignatures(newProfile.id); // 프로필이 준비되면 파일 목록을 불러옵니다.
   } else {
-    signatures.value = [];
+    signatures.value = []; // 로그아웃 등으로 프로필이 없어지면 목록을 비웁니다.
     statusMessage.value = '기능을 사용하려면 로그인이 필요합니다.';
   }
-}, { immediate: true });
+}, { immediate: true }); // immediate: true는 처음 로드될 때도 즉시 실행됩니다.
 
+// --- 함수(Methods) ---
+
+// 시그니처 목록을 불러오는 함수
 const fetchSignatures = async (userId) => {
+  if (!userId) return;
   try {
-    const { data, error } = await supabase.from('signatures').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+    const { data, error } = await supabase
+        .from('signatures')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
     if (error) throw error;
     signatures.value = data;
   } catch (error) {
@@ -36,23 +53,20 @@ const fetchSignatures = async (userId) => {
   }
 };
 
-
+// 파일 업로드 처리 함수
 const handleFileUpload = async (event, type) => {
-  // ❗️ props.profile을 사용하도록 수정
   if (!props.profile?.id || !props.profile?.grade) return alert('사용자 정보가 로딩 중입니다.');
-  if (!['A', 'B', 'C'].includes(props.profile.grade)) {
-    return alert('C등급 이상부터 파일을 업로드할 수 있습니다.');
-  }
+  if (!['A', 'B', 'C'].includes(props.profile.grade)) return alert('C등급 이상부터 파일을 업로드할 수 있습니다.');
+
   const file = event.target.files[0];
   if (!file) return;
-
-  const userId = props.profile.id;
 
   isLoading.value = true;
   try {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('user_id', props.profile.id);
+
     const uploadResponse = await fetch('/api/upload', { method: 'POST', body: formData });
     const result = await uploadResponse.json();
     if (!uploadResponse.ok) throw new Error(result.error || '업로드에 실패했습니다.');
@@ -66,8 +80,10 @@ const handleFileUpload = async (event, type) => {
       size: file.size,
     });
     if (dbError) throw dbError;
+
     if (type === 'image') imageUrl.value = publicUrl;
     else if (type === 'audio') audioUrl.value = publicUrl;
+
     alert('업로드 성공!');
     await fetchSignatures(props.profile.id);
     window.dispatchEvent(new Event('storage-changed'));
@@ -79,6 +95,7 @@ const handleFileUpload = async (event, type) => {
   }
 };
 
+// 파일 삭제 처리 함수
 const handleDelete = async (signature) => {
   if (!confirm(`'${signature.file_name}' 파일을 정말 삭제하시겠습니까?`)) return;
   isLoading.value = true;
@@ -86,8 +103,10 @@ const handleDelete = async (signature) => {
     const fileKey = new URL(signature.file_url).pathname.substring(1);
     const response = await fetch('/api/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: fileKey }) });
     if (!response.ok) throw new Error('R2에서 파일 삭제를 실패했습니다.');
+
     const { error } = await supabase.from('signatures').delete().eq('id', signature.id);
     if (error) throw error;
+
     alert('파일이 성공적으로 삭제되었습니다.');
     await fetchSignatures(props.profile.id);
     window.dispatchEvent(new Event('storage-changed'));
@@ -97,64 +116,118 @@ const handleDelete = async (signature) => {
     isLoading.value = false;
   }
 };
+
+// URL 복사 함수
+const copyUrl = (url) => {
+  if (!url) return alert('복사할 URL이 없습니다.');
+  navigator.clipboard.writeText(url).then(() => alert('클립보드에 URL이 복사되었습니다!'));
+};
+
+// 파일 다운로드 함수
+const downloadFile = (url, filename) => {
+  fetch(url)
+      .then(response => {
+        if (!response.ok) throw new Error('파일을 다운로드할 수 없습니다.');
+        return response.blob();
+      })
+      .then(blob => {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+      }).catch(err => {
+    console.error('다운로드 에러:', err);
+    alert('파일을 다운로드하는 중 오류가 발생했습니다.');
+  });
+};
 </script>
 
 <template>
   <div class="uploader-container">
-    <div v-if="isLoading" class="loading-overlay">...</div>
-    <div class="header"><h1>시그니처 관리</h1></div>
+    <div v-if="isLoading" class="loading-overlay">
+      <div class="spinner"></div>
+      <p>처리 중입니다...</p>
+    </div>
+
+    <div class="header">
+      <h1>시그니처 관리</h1>
+    </div>
 
     <div v-if="profile" class="storage-gauge-box">
       <h3>내 사용량</h3>
       <div class="storage-gauge">
         <div class="gauge-bar">
-          <div class="gauge-fill" :style="{ width: `${(props.profile.storage_used / (300 * 1024 * 1024)) * 100}%` }"></div>
+          <div class="gauge-fill" :style="{ width: `${(profile.storage_used / (300 * 1024 * 1024)) * 100}%` }"></div>
         </div>
-        <div class="gauge-text">{{ (props.profile.storage_used / (1024 * 1024)).toFixed(2) }} MB / 300 MB</div>
+        <div class="gauge-text">
+          {{ (profile.storage_used / (1024 * 1024)).toFixed(2) }} MB / 300 MB
+        </div>
       </div>
     </div>
 
-    <div v-if="!profile" class="status-box">{{ statusMessage }}</div>
+    <div v-if="!profile" class="status-box">
+      {{ statusMessage }}
+    </div>
 
     <div v-if="profile">
       <div class="upload-section">
-      </div>
-      <div class="list-section">
-        <div class="list-section">
-          <h2>내 시그니처 목록</h2>
-
-          <div class="tabs">
-            <button @click="activeTab = 'all'" :class="{ active: activeTab === 'all' }">전체</button>
-            <button @click="activeTab = 'image'" :class="{ active: activeTab === 'image' }">이미지</button>
-            <button @click="activeTab = 'audio'" :class="{ active: activeTab === 'audio' }">오디오</button>
+        <div class="upload-box">
+          <h3>알림 이미지</h3>
+          <div class="preview-area">
+            <img v-if="imageUrl" :src="imageUrl" alt="이미지 미리보기" class="image-preview" />
+            <div v-else class="placeholder">이미지 미리보기</div>
           </div>
+          <div class="button-group">
+            <input type="file" @change="handleFileUpload($event, 'image')" accept="image/*" id="image-upload" style="display:none" :disabled="!['A', 'B', 'C'].includes(profile.grade)" />
+            <label for="image-upload" class="btn" :class="{ disabled: !['A', 'B', 'C'].includes(profile.grade) }">파일 선택</label>
+          </div>
+        </div>
+        <div class="upload-box">
+          <h3>알림음</h3>
+          <div class="preview-area">
+            <audio v-if="audioUrl" :src="audioUrl" controls class="audio-preview"></audio>
+            <div v-else class="placeholder">사운드 사용안함</div>
+          </div>
+          <div class="button-group">
+            <input type="file" @change="handleFileUpload($event, 'audio')" accept="audio/*" id="audio-upload" style="display:none" :disabled="!['A', 'B', 'C'].includes(profile.grade)" />
+            <label for="audio-upload" class="btn" :class="{ disabled: !['A', 'B', 'C'].includes(profile.grade) }">파일 선택</label>
+          </div>
+        </div>
+      </div>
 
-          <div class="signature-list-container">
-            <div v-if="signatures.length === 0" class="empty-list">
-              업로드한 파일이 없습니다.
-            </div>
-            <div v-else>
-              <div v-for="sig in filteredSignatures" :key="sig.id" class="list-item">
-                <div class="item-thumbnail">
-                  <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" />
-                  <span v-else class="audio-icon">🎵</span>
-                  <div v-if="sig.file_type === 'image'" class="thumbnail-preview">
-                    <img :src="sig.file_url" :alt="sig.file_name" />
-                  </div>
+      <div class="list-section">
+        <h2>내 시그니처 목록</h2>
+        <div class="tabs">
+          <button @click="activeTab = 'all'" :class="{ active: activeTab === 'all' }">전체</button>
+          <button @click="activeTab = 'image'" :class="{ active: activeTab === 'image' }">이미지</button>
+          <button @click="activeTab = 'audio'" :class="{ active: activeTab === 'audio' }">오디오</button>
+        </div>
+        <div class="signature-list-container">
+          <div v-if="filteredSignatures.length === 0" class="empty-list">
+            해당 종류의 파일이 없습니다.
+          </div>
+          <div v-else>
+            <div v-for="sig in filteredSignatures" :key="sig.id" class="list-item">
+              <div class="item-thumbnail">
+                <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" />
+                <span v-else class="audio-icon">🎵</span>
+                <div v-if="sig.file_type === 'image'" class="thumbnail-preview">
+                  <img :src="sig.file_url" :alt="sig.file_name" />
                 </div>
-                <div class="item-name" :title="sig.file_name">
-                  {{ sig.file_name }}
-                </div>
-                <div class="item-actions">
-                  <button @click="copyUrl(sig.file_url)" class="btn-icon" title="링크 복사">📋</button>
-                  <button @click="downloadFile(sig.file_url, sig.file_name)" class="btn-icon" title="다운로드">💾</button>
-                  <button @click="handleDelete(sig)" class="btn-icon btn-icon-delete" title="삭제">🗑️</button>
-                </div>
+              </div>
+              <div class="item-name" :title="sig.file_name">
+                {{ sig.file_name }}
+              </div>
+              <div class="item-actions">
+                <button v-if="['A', 'B', 'C'].includes(profile.grade)" @click="copyUrl(sig.file_url)" class="btn-icon" title="링크 복사">📋</button>
+                <button v-if="['A', 'B', 'C'].includes(profile.grade)" @click="downloadFile(sig.file_url, sig.file_name)" class="btn-icon" title="다운로드">💾</button>
+                <button @click="handleDelete(sig)" class="btn-icon btn-icon-delete" title="삭제">🗑️</button>
               </div>
             </div>
           </div>
-        </div>
-        <div class="signature-list-container">
         </div>
       </div>
     </div>
