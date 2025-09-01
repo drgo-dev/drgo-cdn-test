@@ -61,39 +61,47 @@ const checkUser = async () => {
 
 const handleFileUpload = async (event, type) => {
   if (!user.value || !profile.value) return alert('사용자 정보가 로딩 중입니다.');
-
-  // C등급 이상만 업로드 가능하도록 수정
-  if (!['A', 'B', 'C'].includes(profile.value.grade)) {
-    return alert('C등급 이상부터 파일을 업로드할 수 있습니다.');
-  }
+  if (profile.value.grade === 'D') return alert('D등급 사용자는 파일을 업로드할 수 없습니다.');
 
   const file = event.target.files[0];
   if (!file) return;
 
   isLoading.value = true;
   try {
-    const presignResponse = await fetch('/api/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: file.name, contentType: file.type }),
-    });
-    if (!presignResponse.ok) throw new Error('업로드 URL 요청 실패');
-    const { url, fields, publicUrl } = await presignResponse.json();
     const formData = new FormData();
-    Object.entries(fields).forEach(([key, value]) => formData.append(key, value));
-    formData.append("file", file);
-    const uploadResponse = await fetch(url, { method: 'POST', body: formData });
-    if (!uploadResponse.ok) throw new Error('R2에 파일 업로드 실패');
-    const { error } = await supabase.from('signatures').insert({ file_name: file.name, file_url: publicUrl, file_type: type, user_id: user.value.id });
-    if (error) throw error;
+    formData.append('file', file);
+    formData.append('user_id', user.value.id);
+
+    const uploadResponse = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const result = await uploadResponse.json();
+    if (!uploadResponse.ok) throw new Error(result.error || '업로드에 실패했습니다.');
+
+    const { publicUrl } = result;
+
+    const { error: dbError } = await supabase.from('signatures').insert({
+      file_name: file.name,
+      file_url: publicUrl,
+      file_type: type,
+      user_id: user.value.id,
+      size: file.size,
+    });
+    if (dbError) throw dbError;
+
     if (type === 'image') imageUrl.value = publicUrl;
     else if (type === 'audio') audioUrl.value = publicUrl;
+
     alert('업로드 성공!');
     await fetchSignatures();
+    window.dispatchEvent(new Event('storage-changed')); // App.vue에 용량 변경 알림
   } catch (error) {
     alert(`오류가 발생했습니다: ${error.message}`);
   } finally {
     isLoading.value = false;
+    event.target.value = ''; // 같은 파일 다시 선택 가능하도록 초기화
   }
 };
 

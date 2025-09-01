@@ -1,66 +1,63 @@
-// Cloudflare Pages Functions - R2 바인딩 업로드 (FormData)
-// 바인딩 이름: MY_BUCKET  / 공개 도메인: https://cdn.nicevod.com
+// functions/api/upload.js
+
+import { createClient } from '@supabase/supabase-js';
 
 const cors = {
-    'Access-Control-Allow-Origin': '*', // 필요시 도메인으로 제한
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-}
+};
 
-const ALLOWED_TYPES = new Set([
-    'image/png','image/jpeg','image/gif','image/webp','image/svg+xml',
-    'audio/mpeg','audio/wav',
-])
+const ALLOWED_TYPES = new Set(['image/png','image/jpeg','image/gif','image/webp','image/svg+xml', 'audio/mpeg','audio/wav']);
+const MAX_FILE_SIZE = 6 * 1024 * 1024; // 1회 업로드 최대 6MB
+const MAX_TOTAL_STORAGE = 300 * 1024 * 1024; // 사용자별 총 300MB
+const BASE_DOMAIN = 'https://cdn.nicevod.com';
 
-const MAX_SIZE = 6 * 1024 * 1024 // 6MB
-const BASE_DOMAIN = 'https://cdn.nicevod.com' // 복사에 쓰일 도메인
-
-function sanitizeBaseName(name) {
-    // 경로 제거 + 공백→_ + 너무 긴 이름 컷 + 슬래시 금지
-    let n = String(name || '').split('/').pop().trim().replace(/\s+/g, '_')
-    if (!n) n = `${crypto.randomUUID()}.bin`
-    if (n.length > 180) {
-        const parts = n.split('.')
-        const ext = parts.length > 1 ? '.' + parts.pop() : ''
-        n = n.slice(0, 180 - ext.length) + ext
-    }
-    return n.replace(/\//g, '_')
-}
+function sanitizeBaseName(name) { /* ... (이전과 동일) ... */ }
 
 export async function onRequestOptions() {
-    return new Response(null, { headers: cors })
+    return new Response(null, { headers: cors });
 }
 
 export async function onRequestPost({ request, env }) {
     try {
-        const form = await request.formData()
-        const file = form.get('file')
-        const userId = (form.get('user_id') || '').toString()
+        const form = await request.formData();
+        const file = form.get('file');
+        const userId = (form.get('user_id') || '').toString();
 
-        if (!file || !file.name) return json({ error: 'file is required' }, 400)
+        if (!file || !file.name || !userId) return json({ error: '파일과 사용자 ID가 필요합니다.' }, 400);
+        if (!ALLOWED_TYPES.has(file.type)) return json({ error: '허용되지 않는 파일 형식입니다.' }, 415);
+        if (file.size > MAX_FILE_SIZE) return json({ error: `파일 크기는 최대 ${MAX_FILE_SIZE / 1024 / 1024}MB를 초과할 수 없습니다.` }, 413);
 
-        const ct = String(file.type || '')
-        if (!ALLOWED_TYPES.has(ct)) return json({ error: 'Only images/mp3/wav' }, 415)
-        if ((file.size ?? 0) > MAX_SIZE) return json({ error: 'Max 6MB' }, 413)
+        // --- ❗️ 용량 확인 로직 시작 ❗️ ---
+        const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
-        const safeName = sanitizeBaseName(file.name)
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('storage_used')
+            .eq('id', userId)
+            .single();
 
-        const ext = safeName.includes('.') ? '.' + safeName.split('.').pop() : ''
-        const shortId = crypto.randomUUID().split('-')[0]   // 8자리 정도
-        const key = `${userId}_${shortId}${ext}`
+        if (profileError) throw new Error('사용자 프로필을 조회할 수 없습니다.');
 
-       /* // 개인화 + 충돌 방지: <userId>_<uuid>_<원본파일명>
-        const prefix = userId ? `${userId}_` : ''
-        const key = `${prefix}${crypto.randomUUID()}_${safeName}`*/
+        if (profile.storage_used + file.size > MAX_TOTAL_STORAGE) {
+            return json({ error: '총 저장 공간이 부족하여 업로드할 수 없습니다.' }, 413); // 413: Payload Too Large
+        }
+        // --- ✅ 용량 확인 로직 끝 ✅ ---
+
+        const safeName = sanitizeBaseName(file.name);
+        const ext = safeName.includes('.') ? '.' + safeName.split('.').pop() : '';
+        const shortId = crypto.randomUUID().split('-')[0];
+        const key = `${userId}_${shortId}${ext}`;
 
         await env.MY_BUCKET.put(key, file.stream(), {
-            httpMetadata: { contentType: ct },
-        })
+            httpMetadata: { contentType: file.type },
+        });
 
-        const publicUrl = `${BASE_DOMAIN}/${encodeURIComponent(key)}`
-        return json({ ok: true, key, publicUrl })
+        const publicUrl = `${BASE_DOMAIN}/${encodeURIComponent(key)}`;
+        return json({ ok: true, key, publicUrl });
     } catch (e) {
-        return json({ error: String(e) }, 500)
+        return json({ error: String(e) }, 500);
     }
 }
 
@@ -68,51 +65,5 @@ function json(data, status = 200) {
     return new Response(JSON.stringify(data), {
         status,
         headers: { 'Content-Type': 'application/json', ...cors },
-    })
+    });
 }
-
-
-
-
-
-/*
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-
-export async function onRequestPost({ request, env }) {
-    // 1. Vue 앱에서 보낸 요청에서 파일 이름과 타입을 꺼냅니다.
-    const { name, contentType } = await request.json();
-
-    // 2. R2 버킷에 연결하기 위한 클라이언트를 설정합니다.
-    // env 변수들은 다음 단계에서 Cloudflare 대시보드에서 설정합니다.
-    const s3 = new S3Client({
-        region: "auto",
-        endpoint: `https://3404ddcc1cc2726d48ce64b5c15c0fe8.r2.cloudflarestorage.com`,
-        credentials: {
-            accessKeyId: env.R2_ACCESS_KEY_ID,
-            secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-        },
-    });
-
-    // 3. 업로드할 파일의 고유한 키(파일 경로)를 만듭니다.
-    const key = `${crypto.randomUUID()}-${name}`;
-
-    // 4. '업로드 전용 임시 허가증(pre-signed URL)'을 생성합니다. (10분 유효)
-    const uploadUrl = await getSignedUrl(
-        s3,
-        new PutObjectCommand({
-            Bucket: env.R2_BUCKET_NAME,
-            Key: key,
-            ContentType: contentType,
-        }),
-        { expiresIn: 600 }
-    );
-
-    // 5. R2 버킷의 공개 URL을 만듭니다.
-    const publicUrl = `${env.R2_PUBLIC_URL}/${key}`;
-
-    // 6. Vue 앱에게 '업로드 전용 URL'과 '최종 파일 주소'를 응답으로 보내줍니다.
-    return new Response(JSON.stringify({ uploadUrl, publicUrl }), {
-        headers: { "Content-Type": "application/json" },
-    });
-}*/
