@@ -84,7 +84,7 @@ onBeforeUnmount(() => {
       <div class="nav-links">
         <template v-if="user">
           <span v-if="profile">
-            {{ profile.nickname || user.email }} ({{ profile.grade }} 등급)
+            {{ profile.nickname || user.email }} ({{ profile.grade }} 등급) {{profile.storage_used}}
           </span>
           <small v-if="profile?.broadcast_platform && profile?.broadcast_id" class="broadcast-info">
           </small>
