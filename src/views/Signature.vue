@@ -7,13 +7,12 @@ const imageUrl = ref('');
 const audioUrl = ref('');
 const isLoading = ref(false);
 const user = ref(null);
-const profile = ref(null);
+// ❗️ profile의 초기값을 null 대신 객체 형태로 변경하여 안정성 확보
+const profile = ref({ grade: null, expires_at: null, storage_used: 0 });
 const statusMessage = ref('사용자 정보를 확인 중입니다...');
 const signatures = ref([]);
 
 // --- 함수 ---
-
-// 파일 다운로드 함수 (새로 추가)
 const downloadFile = (url, filename) => {
   fetch(url)
       .then(response => response.blob())
@@ -21,10 +20,13 @@ const downloadFile = (url, filename) => {
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = filename;
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
         URL.revokeObjectURL(link.href);
       }).catch(console.error);
 };
+
 const copyUrl = (url) => {
   if (!url) return alert('복사할 URL이 없습니다.');
   navigator.clipboard.writeText(url).then(() => alert('클립보드에 URL이 복사되었습니다!'));
@@ -47,7 +49,9 @@ const checkUser = async () => {
   if (currentUser) {
     try {
       const { data: userProfile } = await supabase.from('profiles').select('grade, expires_at').eq('id', currentUser.id).single();
-      profile.value = userProfile;
+      if (userProfile) {
+        profile.value = userProfile;
+      }
       statusMessage.value = '';
       await fetchSignatures();
     } catch (error) {
@@ -60,9 +64,11 @@ const checkUser = async () => {
 };
 
 const handleFileUpload = async (event, type) => {
-  if (!user.value || !profile.value) return alert('사용자 정보가 로딩 중입니다.');
-  if (profile.value.grade === 'D') return alert('D등급 사용자는 파일을 업로드할 수 없습니다.');
-
+  // ❗️ 함수 시작 부분에서 profile과 grade의 존재를 더 안전하게 확인
+  if (!user.value || !profile.value?.grade) return alert('사용자 정보가 로딩 중입니다. 잠시 후 다시 시도해주세요.');
+  if (!['A', 'B', 'C'].includes(profile.value.grade)) {
+    return alert('C등급 이상부터 파일을 업로드할 수 있습니다.');
+  }
   const file = event.target.files[0];
   if (!file) return;
 
@@ -72,11 +78,7 @@ const handleFileUpload = async (event, type) => {
     formData.append('file', file);
     formData.append('user_id', user.value.id);
 
-    const uploadResponse = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-    });
-
+    const uploadResponse = await fetch('/api/upload', { method: 'POST', body: formData });
     const result = await uploadResponse.json();
     if (!uploadResponse.ok) throw new Error(result.error || '업로드에 실패했습니다.');
 
@@ -96,12 +98,12 @@ const handleFileUpload = async (event, type) => {
 
     alert('업로드 성공!');
     await fetchSignatures();
-    window.dispatchEvent(new Event('storage-changed')); // App.vue에 용량 변경 알림
+    window.dispatchEvent(new Event('storage-changed'));
   } catch (error) {
     alert(`오류가 발생했습니다: ${error.message}`);
   } finally {
     isLoading.value = false;
-    event.target.value = ''; // 같은 파일 다시 선택 가능하도록 초기화
+    event.target.value = '';
   }
 };
 
@@ -116,10 +118,13 @@ const handleDelete = async (signature) => {
       body: JSON.stringify({ key: fileKey }),
     });
     if (!response.ok) throw new Error('R2에서 파일 삭제를 실패했습니다.');
+
     const { error } = await supabase.from('signatures').delete().eq('id', signature.id);
     if (error) throw error;
+
     alert('파일이 성공적으로 삭제되었습니다.');
     await fetchSignatures();
+    window.dispatchEvent(new Event('storage-changed'));
   } catch (error) {
     alert(`오류가 발생했습니다: ${error.message}`);
   } finally {
