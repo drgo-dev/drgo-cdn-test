@@ -1,41 +1,34 @@
 <script setup>
-import { ref, watch } from 'vue'; // ❗️ onMounted 대신 watch를 사용합니다.
+import { ref, watch, computed } from 'vue';
 import { supabase } from '../lib/supabaseClient';
 
-// 1. App.vue로부터 profile 데이터를 props로 받습니다.
 const props = defineProps({
   profile: Object,
 });
 
-const imageUrl = ref('');
-const audioUrl = ref('');
+const signatures = ref([]);
 const isLoading = ref(false);
 const statusMessage = ref('사용자 정보를 확인 중입니다...');
-const signatures = ref([]);
-const user = ref(null); // user는 여전히 필요합니다.
+const activeTab = ref('all');
 
-// ❗️ props.profile이 변경될 때마다 이 함수가 실행됩니다.
+const filteredSignatures = computed(() => {
+  if (activeTab.value === 'all') return signatures.value;
+  return signatures.value.filter(sig => sig.file_type === activeTab.value);
+});
+
 watch(() => props.profile, (newProfile) => {
   if (newProfile?.id) {
     statusMessage.value = '';
-    fetchSignatures(newProfile.id); // 프로필이 준비되면 파일 목록을 불러옵니다.
+    fetchSignatures(newProfile.id);
   } else {
-    // 사용자가 로그아웃하면 newProfile이 null이 되므로, 아래 로직이 필요합니다.
-    signatures.value = []; // 목록 비우기
-    if (!supabase.auth.getSession()) {
-      statusMessage.value = '기능을 사용하려면 로그인이 필요합니다.';
-    }
+    signatures.value = [];
+    statusMessage.value = '기능을 사용하려면 로그인이 필요합니다.';
   }
-}, { immediate: true }); // immediate: true는 페이지가 처음 로드될 때도 즉시 실행하라는 옵션입니다.
+}, { immediate: true });
 
 const fetchSignatures = async (userId) => {
-  if (!userId) return;
   try {
-    const { data, error } = await supabase
-        .from('signatures')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('signatures').select('*').eq('user_id', userId).order('created_at', { ascending: false });
     if (error) throw error;
     signatures.value = data;
   } catch (error) {

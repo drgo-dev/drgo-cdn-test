@@ -1,15 +1,11 @@
 <script setup>
 import { ref } from 'vue';
 import { supabase } from '../lib/supabaseClient';
-import { useRouter } from 'vue-router';
 
 const email = ref('');
 const password = ref('');
 const isLoading = ref(false);
 const errorMessage = ref('');
-
-// 페이지 이동을 위해 Vue Router를 사용합니다.
-const router = useRouter();
 
 const handleLogin = async () => {
   errorMessage.value = '';
@@ -17,22 +13,15 @@ const handleLogin = async () => {
     errorMessage.value = '이메일과 비밀번호를 모두 입력해주세요.';
     return;
   }
-
   isLoading.value = true;
   try {
-    // Supabase 로그인 함수를 호출합니다.
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email: email.value,
       password: password.value,
     });
-
     if (error) throw error;
-
-    // 로그인이 성공하면 '/signature' 페이지로 이동합니다.
-    /*router.push('/signature');*/
-
+    // 성공 시 App.vue의 onAuthStateChange가 페이지 이동을 처리합니다.
   } catch (error) {
-    console.error('로그인 에러:', error);
     errorMessage.value = '이메일 또는 비밀번호가 올바르지 않습니다.';
   } finally {
     isLoading.value = false;

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
-import { supabase } from './lib/supabaseClient'; // 경로 확인
+import { supabase } from './lib/supabaseClient';
 import { useRouter, RouterView, RouterLink } from 'vue-router';
 
 const router = useRouter();
@@ -14,11 +14,12 @@ const loadProfile = async (currentUser) => {
     return;
   }
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
         .from('profiles')
         .select('nickname, grade, storage_used')
         .eq('id', currentUser.id)
         .single();
+    if (error && error.code !== 'PGRST116') throw error;
     profile.value = data;
   } catch (error) {
     console.error('프로필 로딩 중 에러:', error);
@@ -30,39 +31,25 @@ const handleLogout = async () => {
   await supabase.auth.signOut();
   user.value = null;
   profile.value = null;
-  router.push('/');
+  await router.push('/');
 };
 
 onMounted(() => {
-  const { data: { session } } = supabase.auth.getSession();
-  user.value = session?.user ?? null;
-  if (user.value) {
-    loadProfile(user.value);
-  }
-
   const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
     const currentUser = session?.user ?? null;
     user.value = currentUser;
-    profile.value = null;
-    if (currentUser) {
-      await loadProfile(currentUser);
-    }
+    await loadProfile(currentUser);
     if (event === 'SIGNED_IN' && router.currentRoute.value.name === 'login') {
-      router.push('/signature');
+      await router.push('/signature');
     }
   });
   authListener = data.subscription;
-
-  window.addEventListener('storage-changed', () => {
-    if (user.value) loadProfile(user.value)
-  });
+  window.addEventListener('storage-changed', () => { if (user.value) loadProfile(user.value) });
 });
 
 onBeforeUnmount(() => {
   authListener?.unsubscribe();
-  window.removeEventListener('storage-changed', () => {
-    if(user.value) loadProfile(user.value)
-  });
+  window.removeEventListener('storage-changed', () => { if (user.value) loadProfile(user.value) });
 });
 </script>
 
@@ -71,15 +58,13 @@ onBeforeUnmount(() => {
     <nav>
       <router-link to="/" class="brand">Dr.Go CDN</router-link>
       <div class="nav-links">
-        <template v-if="user && profile">
-          <span>{{ profile.nickname || user.email }} ({{ profile.grade }} 등급)</span>
-          <div class="storage-gauge" title="사용량">
+        <template v-if="user">
+          <span v-if="profile">{{ profile.nickname || user.email }} ({{ profile.grade }} 등급)</span>
+          <div v-if="profile" class="storage-gauge" title="사용량">
             <div class="gauge-bar">
               <div class="gauge-fill" :style="{ width: `${(profile.storage_used / (300 * 1024 * 1024)) * 100}%` }"></div>
             </div>
-            <div class="gauge-text">
-              {{ (profile.storage_used / (1024 * 1024)).toFixed(1) }} / 300 MB
-            </div>
+            <div class="gauge-text">{{ (profile.storage_used / (1024 * 1024)).toFixed(1) }} / 300 MB</div>
           </div>
           <router-link to="/mypage">마이페이지</router-link>
           <router-link to="/signature">시그니처</router-link>
@@ -93,7 +78,7 @@ onBeforeUnmount(() => {
     </nav>
   </header>
   <main>
-    <RouterView :profile="profile" />
+    <RouterView :profile="profile" :key="router.currentRoute.value.fullPath" />
   </main>
 </template>
 
