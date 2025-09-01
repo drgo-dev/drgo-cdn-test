@@ -7,8 +7,6 @@ const email = ref('');
 const password = ref('');
 const isLoading = ref(false);
 const errorMessage = ref('');
-
-// 페이지 이동을 위해 Vue Router를 사용합니다.
 const router = useRouter();
 
 const handleLogin = async () => {
@@ -20,7 +18,7 @@ const handleLogin = async () => {
 
   isLoading.value = true;
   try {
-    // Supabase 로그인 함수를 호출합니다.
+    // 1. Supabase 로그인 함수를 호출합니다.
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.value,
       password: password.value,
@@ -28,8 +26,10 @@ const handleLogin = async () => {
 
     if (error) throw error;
 
-    // 로그인이 성공하면 '/signature' 페이지로 이동합니다.
-    /*router.push('/signature');*/
+    // 2. 에러가 없다면 로그인이 성공한 것이므로, 즉시 /signature 페이지로 이동합니다.
+    if (data.session) {
+      await router.push('/signature');
+    }
 
   } catch (error) {
     console.error('로그인 에러:', error);
