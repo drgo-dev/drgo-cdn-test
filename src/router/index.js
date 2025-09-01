@@ -37,22 +37,21 @@ const router = createRouter({
 });
 // 페이지 이동이 일어나기 직전에 이 함수(문지기)가 항상 실행됩니다.
 router.beforeEach(async (to, from, next) => {
+    // getSession()은 페이지 이동 시마다 호출되므로 onAuthStateChange보다 효율적입니다.
     const { data: { session } } = await supabase.auth.getSession();
+    const isLoggedIn = !!session;
 
-    const isLoggedIn = !!session; // 로그인 여부를 boolean 값으로 저장
+    const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+    const isAuthPage = to.name === 'login' || to.name === 'signup';
 
-    // 1. 로그인이 필요한 페이지에 접근하려는데, 로그인이 안 되어 있다면
-    if (to.meta.requiresAuth && !isLoggedIn) {
-        // 로그인 페이지로 보냅니다.
+    if (requiresAuth && !isLoggedIn) {
+        // 로그인이 필요한 페이지에 비로그인 상태로 접근 시, 로그인 페이지로 보냅니다.
         next({ name: 'login' });
-    }
-    // 2. 로그인/회원가입 페이지에 접근하려는데, 이미 로그인이 되어 있다면
-    else if ((to.name === 'login' || to.name === 'signup') && isLoggedIn) {
-        // 시그니처 페이지로 보냅니다.
+    } else if (isAuthPage && isLoggedIn) {
+        // 로그인/회원가입 페이지에 로그인 상태로 접근 시, 시그니처 페이지로 보냅니다.
         next({ name: 'signature' });
-    }
-    // 3. 그 외의 모든 경우는 그냥 통과시킵니다.
-    else {
+    } else {
+        // 그 외 모든 경우는 통과시킵니다.
         next();
     }
 });
