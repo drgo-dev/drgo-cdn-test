@@ -64,11 +64,14 @@ const checkUser = async () => {
 };
 
 const handleFileUpload = async (event, type) => {
-  // ❗️ 함수 시작 부분에서 profile과 grade의 존재를 더 안전하게 확인
-  if (!user.value || !profile.value?.grade) return alert('사용자 정보가 로딩 중입니다. 잠시 후 다시 시도해주세요.');
-  if (!['A', 'B', 'C'].includes(profile.value.grade)) {
-    return alert('C등급 이상부터 파일을 업로드할 수 있습니다.');
+  // ❗️ user와 user.id의 존재를 확실하게 확인합니다.
+  if (!user.value?.id || !profile.value?.grade) {
+    alert('사용자 정보가 로딩 중입니다. 잠시 후 다시 시도해주세요.');
+    return;
   }
+
+  if (profile.value.grade === 'D') return alert('D등급 사용자는 파일을 업로드할 수 없습니다.');
+
   const file = event.target.files[0];
   if (!file) return;
 
@@ -76,7 +79,7 @@ const handleFileUpload = async (event, type) => {
   try {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('user_id', user.value.id);
+    formData.append('user_id', user.value.id); // 이제 이 코드는 안전합니다.
 
     const uploadResponse = await fetch('/api/upload', { method: 'POST', body: formData });
     const result = await uploadResponse.json();
