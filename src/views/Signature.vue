@@ -16,9 +16,12 @@ const user = ref(null);
 const statusMessage = ref('사용자 정보를 확인 중입니다...');
 const signatures = ref([]);
 
-// --- 함수 ---
 const downloadFile = (url, filename) => {
-  fetch(url)
+  // ❗️ 다운로드 전에 URL을 완전한 형태로 변환합니다.
+  const fullUrl = normalizeUrl(url);
+
+  // CORS 문제를 피하기 위해 Worker를 경유하여 다운로드합니다.
+  fetch(fullUrl)
       .then(response => response.blob())
       .then(blob => {
         const link = document.createElement('a');
@@ -28,8 +31,12 @@ const downloadFile = (url, filename) => {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(link.href);
-      }).catch(console.error);
+      }).catch(err => {
+    console.error('다운로드 에러:', err);
+    alert('파일을 다운로드하는 중 오류가 발생했습니다.');
+  });
 };
+
 
 const copyUrl = (url) => {
   if (!url) return alert('복사할 URL이 없습니다.');
@@ -151,10 +158,22 @@ const handleDelete = async (signature) => {
 onMounted(() => {
   checkUser();
 });
+const CDN_BASE = 'https://cdn.nicevod.com'
+function normalizeUrl(input) {
+  if (!input) return ''
+  try {
+    new URL(input); // 완전한 URL인지 확인
+    return input;
+  } catch {
+    // 완전한 URL이 아니면 CDN 도메인을 붙여줍니다.
+    const key = String(input).replace(/^\//, '');
+    return `${CDN_BASE}/${encodeURIComponent(key)}`;
+  }
+}
 
 const loadProfile = async (currentUser) => {
   if (!currentUser?.id) {
-    profile.value = null;
+    props.profile.value = null;
     return;
   }
   try {
@@ -164,10 +183,10 @@ const loadProfile = async (currentUser) => {
         .select('nickname, grade, storage_used') // storage_used 추가
         .eq('id', currentUser.id)
         .single();
-    profile.value = data;
+    props.profile.value = data;
   } catch (error) {
     console.error('프로필 로딩 중 에러:', error);
-    profile.value = null;
+    props.profile.value = null;
   }
 };
 </script>
@@ -205,8 +224,8 @@ const loadProfile = async (currentUser) => {
             <div v-else class="placeholder">이미지 미리보기</div>
           </div>
           <div class="button-group">
-            <input type="file" @change="handleFileUpload($event, 'image')" accept="image/*" id="image-upload" style="display:none" :disabled="!['A', 'B', 'C'].includes(profile.grade)" />
-            <label for="image-upload" class="btn" :class="{ disabled: !['A', 'B', 'C'].includes(profile.grade) }">파일 선택</label>
+            <input type="file" @change="handleFileUpload($event, 'image')" accept="image/*" id="image-upload" style="display:none" :disabled="!['A', 'B', 'C'].includes(props.profile.grade)" />
+            <label for="image-upload" class="btn" :class="{ disabled: !['A', 'B', 'C'].includes(props.profile.grade) }">파일 선택</label>
           </div>
         </div>
         <div class="upload-box">
@@ -216,8 +235,8 @@ const loadProfile = async (currentUser) => {
             <div v-else class="placeholder">사운드 사용안함</div>
           </div>
           <div class="button-group">
-            <input type="file" @change="handleFileUpload($event, 'audio')" accept="audio/*" id="audio-upload" style="display:none" :disabled="!['A', 'B', 'C'].includes(profile.grade)" />
-            <label for="audio-upload" class="btn" :class="{ disabled: !['A', 'B', 'C'].includes(profile.grade) }">파일 선택</label>
+            <input type="file" @change="handleFileUpload($event, 'audio')" accept="audio/*" id="audio-upload" style="display:none" :disabled="!['A', 'B', 'C'].includes(props.profile.grade)" />
+            <label for="audio-upload" class="btn" :class="{ disabled: !['A', 'B', 'C'].includes(props.profile.grade) }">파일 선택</label>
           </div>
         </div>
       </div>
@@ -229,12 +248,17 @@ const loadProfile = async (currentUser) => {
         </div>
         <div v-else class="signature-grid">
           <div v-for="sig in signatures" :key="sig.id" class="signature-item">
-            <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" class="list-preview" :class="{ 'no-right-click': profile.grade === 'D' }" />
+            <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" class="list-preview" :class="{ 'no-right-click': props.profile.grade === 'D' }" />
             <audio v-else-if="sig.file_type === 'audio'" :src="sig.file_url" controls class="list-preview"></audio>
             <div class="item-info">
               <p class="file-name" :title="sig.file_name">{{ sig.file_name }}</p>
-              <button v-if="['A', 'B', 'C'].includes(profile.grade)" @click="copyUrl(sig.file_url)" class="btn-copy">링크 복사</button>
-              <button v-if="['A', 'B', 'C'].includes(profile.grade)" @click="downloadFile(sig.file_url, sig.file_name)" class="btn-download">다운로드</button>
+              <button v-if="['A', 'B', 'C'].includes(props.profile.grade)" @click="copyUrl(sig.file_url)" class="btn-copy">링크 복사</button>
+              <button
+                  v-if="['A', 'B', 'C'].includes(props.profile.grade)"
+                  @click="downloadFile(sig.file_url, sig.file_name)"
+                  class="btn-download">
+                다운로드
+              </button>
               <button @click="handleDelete(sig)" class="btn-delete-item">삭제</button>
             </div>
           </div>
