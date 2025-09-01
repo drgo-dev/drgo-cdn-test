@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { supabase } from '../lib/supabaseClient';
-
+//수정
 // --- 상태 변수 ---
 const imageUrl = ref('');
 const audioUrl = ref('');
