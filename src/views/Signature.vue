@@ -181,8 +181,7 @@ onMounted(() => {
             <div class="item-info">
               <p class="file-name" :title="sig.file_name">{{ sig.file_name }}</p>
               <button v-if="['A', 'B', 'C'].includes(profile.grade)" @click="copyUrl(sig.file_url)" class="btn-copy">링크 복사</button>
-              <button v-if="['A', 'B', 'C'].includes(profile.grade)" @click="downloadFile(sig.file_url, sig.file_name)" class="btn-download">다운로드</button>
-              <button @click="handleDelete(sig)" class="btn-delete-item">삭제</button>
+              <button v-if="['A', 'B', 'C'].includes(profile.grade)" @click="downloadFile(sig.file_url, sig.file_name)" class="btn-download">다운로드</button>              <button @click="handleDelete(sig)" class="btn-delete-item">삭제</button>
             </div>
           </div>
         </div>
