@@ -92,7 +92,7 @@ const handleFileUpload = async (event, type) => {
       file_url: publicUrl,
       file_type: type,
       user_id: user.value.id,
-      size: file.size,
+      size: file.size, // ❗️ 이 줄이 있는지 확인해주세요.
     });
     if (dbError) throw dbError;
 
