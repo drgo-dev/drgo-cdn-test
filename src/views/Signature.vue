@@ -107,9 +107,9 @@ const handleDelete = async (signature) => {
       <h3>내 사용량</h3>
       <div class="storage-gauge">
         <div class="gauge-bar">
-          <div class="gauge-fill" :style="{ width: `${(profile.storage_used / (300 * 1024 * 1024)) * 100}%` }"></div>
+          <div class="gauge-fill" :style="{ width: `${(props.profile.storage_used / (300 * 1024 * 1024)) * 100}%` }"></div>
         </div>
-        <div class="gauge-text">{{ (profile.storage_used / (1024 * 1024)).toFixed(2) }} MB / 300 MB</div>
+        <div class="gauge-text">{{ (props.profile.storage_used / (1024 * 1024)).toFixed(2) }} MB / 300 MB</div>
       </div>
     </div>
 

@@ -33,12 +33,26 @@ const handleLogout = async () => {
   router.push('/');
 };
 
-onMounted(() => {
-  const { data: { session } } = supabase.auth.getSession();
-  user.value = session?.user ?? null;
-  if (user.value) {
-    loadProfile(user.value);
+// src/App.vue 의 <script setup> 내부
+
+onMounted(async () => {
+  // ❗️ 이 부분을 더 안전한 코드로 수정합니다.
+  try {
+    // 1. 전체 응답을 먼저 받습니다.
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+
+    // 2. 데이터가 존재할 경우에만 세션과 사용자 정보를 할당합니다.
+    if (data?.session) {
+      user.value = data.session.user;
+      await loadProfile(data.session.user);
+    }
+  } catch(error) {
+    console.error("세션 로딩 중 에러:", error);
+    user.value = null;
+    profile.value = null;
   }
+  // ---
 
   const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
     const currentUser = session?.user ?? null;
@@ -51,6 +65,7 @@ onMounted(() => {
       router.push('/signature');
     }
   });
+
   authListener = data.subscription;
 
   window.addEventListener('storage-changed', () => {
@@ -72,7 +87,7 @@ onBeforeUnmount(() => {
       <router-link to="/" class="brand">Dr.Go CDN</router-link>
       <div class="nav-links">
         <template v-if="user && profile">
-          <span>{{ profile.nickname || user.email }} ({{ profile.grade }} 등급)</span>
+          <span>{{ profile.nickname || user.email }} ({{ props.profile.grade }} 등급)</span>
           <div class="storage-gauge" title="사용량">
             <div class="gauge-bar">
               <div class="gauge-fill" :style="{ width: `${(profile.storage_used / (300 * 1024 * 1024)) * 100}%` }"></div>
