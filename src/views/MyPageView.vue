@@ -29,7 +29,7 @@ async function getProfile() {
     // select() 부분에 'grade'를 추가합니다.
     const { data, error, status } = await supabase
         .from('profiles')
-        .select(`nickname, broadcast_platform, broadcast_id, grade`)
+        .select(`nickname, broadcast_platform, broadcast_id, grade, paid_at, expires_at`)
         .eq('id', user.value.id)
         .single();
 
@@ -101,6 +101,14 @@ async function updatePassword() {
       <div class="input-group">
         <label for="grade">현재 등급</label>
         <input id="grade" type="text" :value="profile.grade" disabled />
+      </div>
+      <div class="input-group">
+        <label for="paid_at">마지막 결제일</label>
+        <input id="paid_at" type="text" :value="profile.paid_at ? new Date(profile.paid_at).toLocaleString() : '기록 없음'" disabled />
+      </div>
+      <div class="input-group">
+        <label for="expires_at">서비스 만료일</label>
+        <input id="expires_at" type="text" :value="profile.expires_at ? new Date(profile.expires_at).toLocaleString() : '기록 없음'" disabled />
       </div>
       <div class="input-group">
         <label for="nickname">닉네임</label>

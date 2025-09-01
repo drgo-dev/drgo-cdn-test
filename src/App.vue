@@ -10,26 +10,22 @@ const user = ref(null)
 const profile = ref({ nickname: '', grade: null, broadcast_platform: null, broadcast_id: null })
 
 // 프로필 로더 (결과 없으면 기본값)
+// src/App.vue 의 <script setup> 내부
+
 const loadProfile = async (currentUser) => {
-  if (!currentUser?.id) {
-    profile.value = { nickname: '', grade: null, broadcast_platform: null, broadcast_id: null }
-    return
+  try {
+    // 1. 필요한 모든 프로필 정보를 select 합니다.
+    const { data } = await supabase
+        .from('profiles')
+        .select('nickname, grade, expires_at') // expires_at 추가
+        .eq('id', currentUser.id)
+        .single();
+    profile.value = data;
+  } catch (error) {
+    console.error('프로필 로딩 중 에러:', error);
+    profile.value = null;
   }
-
-  const { data, error } = await supabase
-      .from('profiles')
-      .select('nickname, grade, broadcast_platform, broadcast_id')  // ✅ 컬럼 확장
-      .eq('id', currentUser.id)
-      .maybeSingle()
-
-  if (error) {
-    console.error('프로필 로딩 중 에러:', error)
-    profile.value = { nickname: '', grade: null, broadcast_platform: null, broadcast_id: null }
-    return
-  }
-
-  profile.value = data ?? { nickname: '', grade: null, broadcast_platform: null, broadcast_id: null }
-}
+};
 
 // ✅ 회원가입 폼에서 세션스토리지에 넣어둔 값이 있으면 upsert
 const upsertProfileExtraFromSession = async (currentUser) => {
@@ -111,11 +107,13 @@ const handleLogout = async () => {
       <router-link to="/" class="brand">Dr.Go CDN</router-link>
       <div class="nav-links">
         <template v-if="user">
+          <span>{{ profile?.nickname || user.email }} ({{ profile?.grade }} 등급)</span>
+
           <!-- ✅ 안전 접근: 옵셔널 체이닝/기본값 -->
-          <span>
+<!--          <span>
             {{ (profile && profile.nickname) ? profile.nickname : user.email }}
             ({{ profile?.grade ?? '' }} 등급)
-          </span>
+          </span>-->
 
           <small v-if="profile?.broadcast_platform && profile?.broadcast_id" class="broadcast-info">
             <!-- 플랫폼 아이콘 -->
