@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
-import { supabase } from './lib/supabaseClient';
+import { supabase } from './lib/supabaseClient'; // 경로 확인
 import { useRouter, RouterView, RouterLink } from 'vue-router';
 
 const router = useRouter();
@@ -8,20 +8,17 @@ const user = ref(null);
 const profile = ref(null);
 let authListener = null;
 
-// 프로필 정보를 불러오는 통합 함수
 const loadProfile = async (currentUser) => {
   if (!currentUser?.id) {
     profile.value = null;
     return;
   }
   try {
-    const { data, error } = await supabase
+    const { data } = await supabase
         .from('profiles')
         .select('nickname, grade, storage_used')
         .eq('id', currentUser.id)
         .single();
-
-    if (error) throw error;
     profile.value = data;
   } catch (error) {
     console.error('프로필 로딩 중 에러:', error);
@@ -29,7 +26,6 @@ const loadProfile = async (currentUser) => {
   }
 };
 
-// 로그아웃 함수
 const handleLogout = async () => {
   await supabase.auth.signOut();
   user.value = null;
@@ -37,37 +33,35 @@ const handleLogout = async () => {
   router.push('/');
 };
 
-// 컴포넌트가 마운트될 때 실행
 onMounted(() => {
-  // 1. 로그인/로그아웃 등 인증 상태 변화를 실시간으로 감지하는 리스너를 먼저 설정합니다.
+  const { data: { session } } = supabase.auth.getSession();
+  user.value = session?.user ?? null;
+  if (user.value) {
+    loadProfile(user.value);
+  }
+
   const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
     const currentUser = session?.user ?? null;
     user.value = currentUser;
-    profile.value = null; // 상태 변경 시 프로필을 초기화하고 다시 불러옵니다.
-
+    profile.value = null;
     if (currentUser) {
       await loadProfile(currentUser);
     }
-
-    // 사용자가 로그인 페이지에서 성공적으로 로그인했을 때만 페이지를 이동시킵니다.
     if (event === 'SIGNED_IN' && router.currentRoute.value.name === 'login') {
       router.push('/signature');
     }
   });
-
   authListener = data.subscription;
 
-  // 다른 페이지(Signature.vue)에서 파일 용량이 변경되었을 때 알림을 받아 프로필을 새로고침합니다.
   window.addEventListener('storage-changed', () => {
-    if (user.value) loadProfile(user.value);
+    if (user.value) loadProfile(user.value)
   });
 });
 
-// 컴포넌트가 파괴되기 직전에 리스너를 정리합니다.
 onBeforeUnmount(() => {
   authListener?.unsubscribe();
   window.removeEventListener('storage-changed', () => {
-    if (user.value) loadProfile(user.value);
+    if(user.value) loadProfile(user.value)
   });
 });
 </script>
@@ -102,7 +96,6 @@ onBeforeUnmount(() => {
     <RouterView :profile="profile" />
   </main>
 </template>
-
 
 <style>
 /* 전역 스타일 */
