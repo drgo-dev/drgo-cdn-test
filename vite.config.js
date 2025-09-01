@@ -9,7 +9,7 @@ export default defineConfig({
             // '/api'로 시작하는 모든 요청을 대상으로 합니다.
             '/api': {
                 // ❗️ 실제 배포된 Cloudflare Pages 주소로 변경해주세요.
-                target: 'https://nicevod.com',
+                target: 'https://drgo-cdn-test.pages.dev',
                 changeOrigin: true,
             },
         },
