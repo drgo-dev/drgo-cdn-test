@@ -1,14 +1,18 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { supabase } from '../lib/supabaseClient';
-//수정
+
+const props = defineProps({
+  profile: Object,
+});
+
 // --- 상태 변수 ---
 const imageUrl = ref('');
 const audioUrl = ref('');
 const isLoading = ref(false);
 const user = ref(null);
 // ❗️ profile의 초기값을 null 대신 객체 형태로 변경하여 안정성 확보
-const profile = ref({ grade: null, expires_at: null, storage_used: 0 });
+// const profile = ref({ grade: null, expires_at: null, storage_used: 0 });
 const statusMessage = ref('사용자 정보를 확인 중입니다...');
 const signatures = ref([]);
 
@@ -44,9 +48,19 @@ const fetchSignatures = async () => {
 };
 
 const checkUser = async () => {
-  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  const {data: {user: currentUser}} = await supabase.auth.getUser();
   user.value = currentUser;
-  if (currentUser) {
+  if (currentUser && props.profile) {
+    statusMessage.value = '';
+    await fetchSignatures();
+  } else if (currentUser && !props.profile) {
+    statusMessage.value = '프로필 로딩 중... 잠시 후 새로고침해주세요.';
+  } else {
+    statusMessage.value = '기능을 사용하려면 로그인이 필요합니다.';
+  }
+};
+
+/*
     try {
       const { data: userProfile } = await supabase.from('profiles').select('grade, expires_at').eq('id', currentUser.id).single();
       if (userProfile) {
@@ -62,15 +76,13 @@ const checkUser = async () => {
     statusMessage.value = '기능을 사용하려면 로그인이 필요합니다.';
   }
 };
+*/
 
 const handleFileUpload = async (event, type) => {
   // ❗️ user와 user.id의 존재를 확실하게 확인합니다.
-  if (!user.value?.id || !profile.value?.grade) {
-    alert('사용자 정보가 로딩 중입니다. 잠시 후 다시 시도해주세요.');
-    return;
-  }
-
-  if (profile.value.grade === 'D') return alert('D등급 사용자는 파일을 업로드할 수 없습니다.');
+  if (!user.value || !props.profile.grade)
+    return alert('사용자 정보가 로딩 중입니다. 잠시 후 다시 시도해주세요.');
+  if (props.profile.grade === 'D') return alert('D등급 사용자는 파일을 업로드할 수 없습니다.');
 
   const file = event.target.files[0];
   if (!file) return;
@@ -138,9 +150,29 @@ const handleDelete = async (signature) => {
 onMounted(() => {
   checkUser();
 });
+
+const loadProfile = async (currentUser) => {
+  if (!currentUser?.id) {
+    profile.value = null;
+    return;
+  }
+  try {
+    // ❗️ select() 부분에 storage_used를 추가합니다.
+    const { data } = await supabase
+        .from('profiles')
+        .select('nickname, grade, storage_used') // storage_used 추가
+        .eq('id', currentUser.id)
+        .single();
+    profile.value = data;
+  } catch (error) {
+    console.error('프로필 로딩 중 에러:', error);
+    profile.value = null;
+  }
+};
 </script>
 
 <template>
+
   <div class="uploader-container">
     <div v-if="isLoading" class="loading-overlay"><div class="spinner"></div><p>처리 중입니다...</p></div>
     <div class="header"><h1>시그니처 관리</h1></div>
@@ -172,8 +204,8 @@ onMounted(() => {
       </div>
 
       <div class="list-section">
-        <h2>내 시그니처 목록</h2>
         <div v-if="signatures.length === 0" class="empty-list">업로드한 파일이 없습니다.</div>
+
         <div v-else class="signature-grid">
           <div v-for="sig in signatures" :key="sig.id" class="signature-item">
             <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" class="list-preview" :class="{ 'no-right-click': profile.grade === 'D' }" />

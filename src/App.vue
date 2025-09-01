@@ -78,16 +78,27 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <main>
+    <RouterView :profile="profile" />
+  </main>
   <header class="navbar">
     <nav>
       <router-link to="/" class="brand">Dr.Go CDN</router-link>
       <div class="nav-links">
         <template v-if="user">
           <span v-if="profile">
-            {{ profile.nickname || user.email }} ({{ profile.grade }} 등급) {{profile.storage_used}}
+            {{ profile.nickname || user.email }} ({{ profile.grade }} 등급)
           </span>
           <small v-if="profile?.broadcast_platform && profile?.broadcast_id" class="broadcast-info">
           </small>
+          <div class="storage-gauge" title="사용량">
+            <div class="gauge-bar">
+              <div class="gauge-fill" :style="{ width: `${(profile.storage_used / (300 * 1024 * 1024)) * 100}%` }"></div>
+            </div>
+            <div class="gauge-text">
+              {{ (profile.storage_used / (1024 * 1024)).toFixed(2) }} MB / 300 MB
+            </div>
+          </div>
           <router-link to="/mypage">마이페이지</router-link>
           <router-link to="/signature">시그니처</router-link>
           <button @click="handleLogout" class="logout-button">로그아웃</button>
