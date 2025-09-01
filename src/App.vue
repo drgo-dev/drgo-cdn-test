@@ -8,21 +8,18 @@ const user = ref(null);
 const profile = ref(null); // profile은 null로 시작하는 것이 더 안전합니다.
 let authListener = null;
 
-// 프로필 정보를 불러오는 함수
 const loadProfile = async (currentUser) => {
   if (!currentUser?.id) {
     profile.value = null;
     return;
   }
   try {
-    // 필요한 모든 프로필 정보를 한 번에 불러옵니다.
-    const { data, error } = await supabase
+    // ❗️ select() 부분에 storage_used를 추가합니다.
+    const { data } = await supabase
         .from('profiles')
-        .select('nickname, grade, broadcast_platform, broadcast_id, storage_used')
+        .select('nickname, grade, storage_used') // storage_used 추가
         .eq('id', currentUser.id)
         .single();
-
-    if (error) throw error;
     profile.value = data;
   } catch (error) {
     console.error('프로필 로딩 중 에러:', error);

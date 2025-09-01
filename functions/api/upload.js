@@ -20,7 +20,7 @@ export async function onRequestPost({ request, env }) {
         const userId = (form.get('user_id') || '').toString();
 
         if (!file || !file.name || !userId) {
-            return new Response(JSON.stringify({ error: '파일과 사용자 ID가 필요합니다.' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors } });
+            return new Response(JSON.stringify({ error: '파일과 사용자 ID가 필요합니다.' }), { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });
         }
 
         const { data: profile, error: profileError } = await supabase
@@ -32,7 +32,7 @@ export async function onRequestPost({ request, env }) {
         if (profileError) throw new Error('사용자 프로필을 조회할 수 없습니다.');
 
         if (profile.storage_used + file.size > MAX_TOTAL_STORAGE) {
-            return new Response(JSON.stringify({ error: '총 저장 공간이 부족하여 업로드할 수 없습니다.' }), { status: 413, headers: { 'Content-Type': 'application/json', ...cors } });
+            return new Response(JSON.stringify({ error: '총 저장 공간이 부족하여 업로드할 수 없습니다.' }), { status: 413, headers: { ...cors, 'Content-Type': 'application/json' } });
         }
 
         const key = `${userId}_${crypto.randomUUID()}.${file.name.split('.').pop()}`;
@@ -41,7 +41,9 @@ export async function onRequestPost({ request, env }) {
             httpMetadata: { contentType: file.type },
         });
 
+        // ❗️ BASE_DOMAIN 대신 env.R2_PUBLIC_URL 을 사용하도록 수정
         const publicUrl = `${env.R2_PUBLIC_URL}/${encodeURIComponent(key)}`;
+
         return new Response(JSON.stringify({ ok: true, key, publicUrl }), {
             headers: { 'Content-Type': 'application/json', ...cors },
         });
