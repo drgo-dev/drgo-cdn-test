@@ -1,12 +1,11 @@
 <script setup>
-import { ref, watch, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { supabase } from '../lib/supabaseClient';
+import { useUserStore } from '../stores/user';
+const userStore = useUserStore(); // 스토어 사용
 
-// --- Props ---
-// 부모(App.vue)로부터 profile 데이터를 props로 받습니다.
-const props = defineProps({
-  profile: Object,
-});
+const profile = computed(() => userStore.profile);
+const user = computed(() => userStore.user);
 
 // --- 상태(State) 변수 ---
 const imageUrl = ref('');
@@ -17,27 +16,17 @@ const signatures = ref([]);
 const activeTab = ref('all');
 
 // --- Computed 속성 ---
+
 // 선택된 탭에 따라 목록을 필터링합니다.
 const filteredSignatures = computed(() => {
   if (activeTab.value === 'all') return signatures.value;
   return signatures.value.filter(sig => sig.file_type === activeTab.value);
 });
 
-// --- Watch (감시자) ---
-// 부모로부터 받은 profile 데이터가 변경될 때를 감지하여 동작합니다.
-watch(() => props.profile, (newProfile) => {
-  if (newProfile?.id) {
-    statusMessage.value = '';
-    fetchSignatures(newProfile.id); // 프로필이 준비되면 파일 목록을 불러옵니다.
-  } else {
-    signatures.value = []; // 로그아웃 등으로 프로필이 없어지면 목록을 비웁니다.
-    statusMessage.value = '기능을 사용하려면 로그인이 필요합니다.';
-  }
-}, { immediate: true }); // immediate: true는 처음 로드될 때도 즉시 실행됩니다.
-
 // --- 함수(Methods) ---
 
 // 시그니처 목록을 불러오는 함수
+
 const fetchSignatures = async (userId) => {
   if (!userId) return;
   try {
@@ -53,11 +42,20 @@ const fetchSignatures = async (userId) => {
   }
 };
 
+watch(() => userStore.user, (newUser) => {
+  if(newUser) {
+    fetchSignatures(newUser.id);
+  } else {
+    signatures.value = [];
+  }
+}, { immediate: true });
+
 // 파일 업로드 처리 함수
 const handleFileUpload = async (event, type) => {
-  if (!props.profile?.id || !props.profile?.grade) return alert('사용자 정보가 로딩 중입니다.');
-  if (!['A', 'B', 'C'].includes(props.profile.grade)) return alert('C등급 이상부터 파일을 업로드할 수 있습니다.');
-
+  if (!user.value?.id || !profile.value?.grade) return alert('사용자 정보가 로딩 중입니다.');
+  if (!['A', 'B', 'C'].includes(profile.value.grade)) {
+    return alert('C등급 이상부터 파일을 업로드할 수 있습니다.');
+  }
   const file = event.target.files[0];
   if (!file) return;
 
@@ -65,7 +63,7 @@ const handleFileUpload = async (event, type) => {
   try {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('user_id', props.profile.id);
+    formData.append('user_id', userStore.profile.id);
 
     const uploadResponse = await fetch('/api/upload', { method: 'POST', body: formData });
     const result = await uploadResponse.json();
@@ -76,7 +74,7 @@ const handleFileUpload = async (event, type) => {
       file_name: file.name,
       file_url: publicUrl,
       file_type: type,
-      user_id: props.profile.id,
+      user_id: userStore.profile.id,
       size: file.size,
     });
     if (dbError) throw dbError;
@@ -85,7 +83,7 @@ const handleFileUpload = async (event, type) => {
     else if (type === 'audio') audioUrl.value = publicUrl;
 
     alert('업로드 성공!');
-    await fetchSignatures(props.profile.id);
+    await fetchSignatures(userStore.profile.id);
     window.dispatchEvent(new Event('storage-changed'));
   } catch (error) {
     alert(`오류가 발생했습니다: ${error.message}`);
@@ -108,7 +106,7 @@ const handleDelete = async (signature) => {
     if (error) throw error;
 
     alert('파일이 성공적으로 삭제되었습니다.');
-    await fetchSignatures(props.profile.id);
+    await fetchSignatures(userStore.profile.id);
     window.dispatchEvent(new Event('storage-changed'));
   } catch (error) {
     alert(`오류가 발생했습니다: ${error.message}`);
@@ -160,10 +158,10 @@ const downloadFile = (url, filename) => {
       <h3>내 사용량</h3>
       <div class="storage-gauge">
         <div class="gauge-bar">
-          <div class="gauge-fill" :style="{ width: `${(profile.storage_used / (300 * 1024 * 1024)) * 100}%` }"></div>
+          <div class="gauge-fill" :style="{ width: `${(userStore.profile.storage_used / (300 * 1024 * 1024)) * 100}%` }"></div>
         </div>
         <div class="gauge-text">
-          {{ (profile.storage_used / (1024 * 1024)).toFixed(2) }} MB / 300 MB
+          {{ (userStore.profile.storage_used / (1024 * 1024)).toFixed(2) }} MB / 300 MB
         </div>
       </div>
     </div>
@@ -182,7 +180,7 @@ const downloadFile = (url, filename) => {
           </div>
           <div class="button-group">
             <input type="file" @change="handleFileUpload($event, 'image')" accept="image/*" id="image-upload" style="display:none" :disabled="!['A', 'B', 'C'].includes(profile.grade)" />
-            <label for="image-upload" class="btn" :class="{ disabled: !['A', 'B', 'C'].includes(profile.grade) }">파일 선택</label>
+            <label for="image-upload" class="btn" :class="{ disabled: !['A', 'B', 'C'].includes(userStore.profile.grade) }">파일 선택</label>
           </div>
         </div>
         <div class="upload-box">
@@ -193,7 +191,7 @@ const downloadFile = (url, filename) => {
           </div>
           <div class="button-group">
             <input type="file" @change="handleFileUpload($event, 'audio')" accept="audio/*" id="audio-upload" style="display:none" :disabled="!['A', 'B', 'C'].includes(profile.grade)" />
-            <label for="audio-upload" class="btn" :class="{ disabled: !['A', 'B', 'C'].includes(profile.grade) }">파일 선택</label>
+            <label for="audio-upload" class="btn" :class="{ disabled: !['A', 'B', 'C'].includes(userStore.profile.grade) }">파일 선택</label>
           </div>
         </div>
       </div>
@@ -222,8 +220,8 @@ const downloadFile = (url, filename) => {
                 {{ sig.file_name }}
               </div>
               <div class="item-actions">
-                <button v-if="['A', 'B', 'C'].includes(profile.grade)" @click="copyUrl(sig.file_url)" class="btn-icon" title="링크 복사">📋</button>
-                <button v-if="['A', 'B', 'C'].includes(profile.grade)" @click="downloadFile(sig.file_url, sig.file_name)" class="btn-icon" title="다운로드">💾</button>
+                <button v-if="['A', 'B', 'C'].includes(userStore.profile.grade)" @click="copyUrl(sig.file_url)" class="btn-icon" title="링크 복사">📋</button>
+                <button v-if="['A', 'B', 'C'].includes(userStore.profile.grade)" @click="downloadFile(sig.file_url, sig.file_name)" class="btn-icon" title="다운로드">💾</button>
                 <button @click="handleDelete(sig)" class="btn-icon btn-icon-delete" title="삭제">🗑️</button>
               </div>
             </div>
