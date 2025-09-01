@@ -15,6 +15,14 @@ const user = ref(null);
 // const profile = ref({ grade: null, expires_at: null, storage_used: 0 });
 const statusMessage = ref('사용자 정보를 확인 중입니다...');
 const signatures = ref([]);
+const activeTab = ref('all');
+
+const filteredSignatures = computed(() => {
+  if (activeTab.value === 'all') {
+    return signatures.value;
+  }
+  return signatures.value.filter(sig => sig.file_type === activeTab.value);
+});
 
 const downloadFile = (url, filename) => {
   // ❗️ 다운로드 전에 URL을 완전한 형태로 변환합니다.
@@ -243,23 +251,34 @@ const loadProfile = async (currentUser) => {
 
       <div class="list-section">
         <h2>내 시그니처 목록</h2>
-        <div v-if="signatures.length === 0" class="empty-list">
-          업로드한 파일이 없습니다.
+
+        <div class="tabs">
+          <button @click="activeTab = 'all'" :class="{ active: activeTab === 'all' }">전체</button>
+          <button @click="activeTab = 'image'" :class="{ active: activeTab === 'image' }">이미지</button>
+          <button @click="activeTab = 'audio'" :class="{ active: activeTab === 'audio' }">오디오</button>
         </div>
-        <div v-else class="signature-grid">
-          <div v-for="sig in signatures" :key="sig.id" class="signature-item">
-            <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" class="list-preview" :class="{ 'no-right-click': props.profile.grade === 'D' }" />
-            <audio v-else-if="sig.file_type === 'audio'" :src="sig.file_url" controls class="list-preview"></audio>
-            <div class="item-info">
-              <p class="file-name" :title="sig.file_name">{{ sig.file_name }}</p>
-              <button v-if="['A', 'B', 'C'].includes(props.profile.grade)" @click="copyUrl(sig.file_url)" class="btn-copy">링크 복사</button>
-              <button
-                  v-if="['A', 'B', 'C'].includes(props.profile.grade)"
-                  @click="downloadFile(sig.file_url, sig.file_name)"
-                  class="btn-download">
-                다운로드
-              </button>
-              <button @click="handleDelete(sig)" class="btn-delete-item">삭제</button>
+
+        <div class="signature-list-container">
+          <div v-if="signatures.length === 0" class="empty-list">
+            업로드한 파일이 없습니다.
+          </div>
+          <div v-else>
+            <div v-for="sig in filteredSignatures" :key="sig.id" class="list-item">
+              <div class="item-thumbnail">
+                <img v-if="sig.file_type === 'image'" :src="sig.file_url" :alt="sig.file_name" />
+                <span v-else class="audio-icon">🎵</span>
+                <div v-if="sig.file_type === 'image'" class="thumbnail-preview">
+                  <img :src="sig.file_url" :alt="sig.file_name" />
+                </div>
+              </div>
+              <div class="item-name" :title="sig.file_name">
+                {{ sig.file_name }}
+              </div>
+              <div class="item-actions">
+                <button @click="copyUrl(sig.file_url)" class="btn-icon" title="링크 복사">📋</button>
+                <button @click="downloadFile(sig.file_url, sig.file_name)" class="btn-icon" title="다운로드">💾</button>
+                <button @click="handleDelete(sig)" class="btn-icon btn-icon-delete" title="삭제">🗑️</button>
+              </div>
             </div>
           </div>
         </div>
@@ -323,4 +342,126 @@ audio.list-preview { object-fit: initial; }
 .gauge-bar { flex-grow: 1; height: 12px; background-color: #e9ecef; border-radius: 6px; overflow: hidden; }
 .gauge-fill { height: 100%; background-color: #007bff; border-radius: 6px; transition: width 0.5s ease; }
 .gauge-text { font-size: 1em; color: #333; font-weight: 500; white-space: nowrap; }
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #eee;
+}
+.tabs button {
+  padding: 10px 20px;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  font-size: 1.1em;
+  font-weight: 500;
+  color: #888;
+  position: relative;
+  transition: color 0.3s;
+}
+.tabs button.active {
+  color: #007bff;
+}
+.tabs button.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: #007bff;
+}
+
+/* 새 목록 스타일 */
+.signature-list-container {
+  background-color: #fff;
+  border-radius: 8px;
+}
+.list-item {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  border-bottom: 1px solid #f0f0f0;
+  gap: 15px;
+}
+.list-item:last-child {
+  border-bottom: none;
+}
+.item-thumbnail {
+  width: 60px;
+  height: 40px;
+  background-color: #f0f2f5;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative; /* 미리보기 기준점 */
+  cursor: pointer;
+}
+.item-thumbnail img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.audio-icon {
+  font-size: 24px;
+}
+.item-name {
+  flex-grow: 1;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item-actions {
+  display: flex;
+  gap: 10px;
+}
+.btn-icon {
+  background: none;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, color 0.2s;
+}
+.btn-icon:hover {
+  background-color: #f0f2f5;
+}
+.btn-icon-delete:hover {
+  background-color: #dc3545;
+  color: white;
+  border-color: #dc3545;
+}
+
+/* 이미지 호버 시 미리보기 스타일 */
+.thumbnail-preview {
+  display: none; /* 평소에는 숨김 */
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%);
+  margin-left: 15px;
+  width: 200px;
+  height: auto;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  padding: 5px;
+  border-radius: 4px;
+  z-index: 10;
+}
+.thumbnail-preview img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.item-thumbnail:hover .thumbnail-preview {
+  display: block; /* 마우스 올리면 보이게 */
+}
 </style>
