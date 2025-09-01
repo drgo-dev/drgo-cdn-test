@@ -35,13 +35,17 @@ export async function onRequestPost({ request, env }) {
             return new Response(JSON.stringify({ error: '총 저장 공간이 부족하여 업로드할 수 없습니다.' }), { status: 413, headers: { ...cors, 'Content-Type': 'application/json' } });
         }
 
-        const key = `${userId}_${crypto.randomUUID()}.${file.name.split('.').pop()}`;
+        // --- ❗️ 이 부분이 파일 이름을 짧게 만드는 핵심 변경점입니다. ❗️ ---
+        const shortId = crypto.randomUUID().split('-')[0]; // 8자리의 랜덤 코드 생성
+        const extension = file.name.split('.').pop();      // 원본 파일의 확장자 가져오기
+        const key = `${shortId}.${extension}`;             // "8자리코드.확장자" 형식의 새 파일 이름
+        // --- ✅ 여기까지입니다. ✅ ---
 
         await env.MY_BUCKET.put(key, file.stream(), {
             httpMetadata: { contentType: file.type },
         });
 
-        // ❗️ BASE_DOMAIN 대신 env.R2_PUBLIC_URL 을 사용하도록 수정
+        // env.R2_PUBLIC_URL (cdn.nicevod.com) 을 사용하여 최종 URL 생성
         const publicUrl = `${env.R2_PUBLIC_URL}/${encodeURIComponent(key)}`;
 
         return new Response(JSON.stringify({ ok: true, key, publicUrl }), {
