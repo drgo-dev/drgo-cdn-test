@@ -1,19 +1,20 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
-import { supabase } from '../lib/supabaseClient';
 import { useUserStore } from '../stores/user';
-const userStore = useUserStore(); // 스토어 사용
+import { supabase } from '../lib/supabaseClient';
 
+const userStore = useUserStore();
 const profile = computed(() => userStore.profile);
 const user = computed(() => userStore.user);
+
+const signatures = ref([]);
+const isLoading = ref(false);
+const activeTab = ref('all');
 
 // --- 상태(State) 변수 ---
 const imageUrl = ref('');
 const audioUrl = ref('');
-const isLoading = ref(false);
 const statusMessage = ref('사용자 정보를 확인 중입니다...');
-const signatures = ref([]);
-const activeTab = ref('all');
 
 // --- Computed 속성 ---
 
