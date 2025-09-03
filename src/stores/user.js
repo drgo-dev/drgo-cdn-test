@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { supabase } from '@/lib/supabaseClient' // 경로가 @/ 가 아니면 ../lib/supabaseClient 로 수정
+import { supabase } from '@/lib/supabaseClient'
 
 export const useUserStore = defineStore('user', () => {
     // --- 상태 (State) ---
@@ -11,8 +11,6 @@ export const useUserStore = defineStore('user', () => {
     const isLoggedIn = computed(() => !!user.value)
 
     // --- 액션 (Actions) ---
-
-    // 프로필 정보를 불러오는 함수
     async function fetchProfile() {
         if (!user.value?.id) {
             profile.value = null
@@ -21,10 +19,10 @@ export const useUserStore = defineStore('user', () => {
         try {
             const { data, error } = await supabase
                 .from('profiles')
-                .select('nickname, grade, storage_used')
+                .select('nickname, grade, storage_used, broadcast_platform, broadcast_id')
                 .eq('id', user.value.id)
                 .single()
-            if (error && error.code !== 'PGRT116') throw error
+            if (error && error.code !== 'PGRST116') throw error
             profile.value = data
         } catch (error) {
             console.error('프로필 로딩 에러:', error)
