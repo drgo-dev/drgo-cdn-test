@@ -1,9 +1,9 @@
-// _worker.js  (프로젝트 루트에 위치)
+// _worker.js (추가된 진단 핸들러 포함)
 import { createClient } from '@supabase/supabase-js';
 
 const cors = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 const json = (data, status = 200) =>
@@ -13,13 +13,20 @@ export default {
     async fetch(request, env) {
         const url = new URL(request.url);
 
-        // CORS preflight
+        // Preflight
         if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
 
-        // 업로드 엔드포인트
+        // ✅ 1) 워커 라우팅 확인용 핑
+        if (url.pathname === '/upload' && request.method === 'GET') {
+            return json({ ok: true, via: '_worker.js' });
+        }
+
+        // 2) 실제 업로드
         if (url.pathname === '/upload' && request.method === 'POST') {
             try {
-                const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+                const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY, {
+                    auth: { persistSession: false, autoRefreshToken: false },
+                });
 
                 const authHeader = request.headers.get('Authorization') || '';
                 const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -35,23 +42,21 @@ export default {
                 if (!file || !userId) return json({ error: '파일과 사용자 ID가 필요합니다.' }, 400);
                 if (userId !== authedUserId) return json({ error: '사용자 불일치' }, 403);
 
-                // (필요 시) 사이즈/타입 제한
-                // if (file.size > 10 * 1024 * 1024) return json({ error: '파일이 너무 큽니다.' }, 413);
+                const type = file.type || 'application/octet-stream';
+                const ext = (file.name || 'file').split('.').pop() || 'bin';
+                const key = `${crypto.randomUUID()}.${ext}`;
 
-                const key = `${crypto.randomUUID()}.${(file.name || 'file').split('.').pop() || 'bin'}`;
-                await env.MY_BUCKET.put(key, file.stream(), {
-                    httpMetadata: { contentType: file.type || 'application/octet-stream' },
-                });
-
+                await env.MY_BUCKET.put(key, file.stream(), { httpMetadata: { contentType: type } });
                 const publicUrl = `${env.R2_PUBLIC_URL}/${encodeURIComponent(key)}`;
+
                 return json({ ok: true, key, publicUrl, userId: authedUserId });
             } catch (e) {
-                console.error('Upload error', e);
+                console.error('Upload error:', e);
                 return json({ error: e.message || '서버 에러' }, 500);
             }
         }
 
-        // 그 외 요청은 정적 사이트로 전달
+        // 정적 에셋
         return env.ASSETS.fetch(request);
     },
 };
