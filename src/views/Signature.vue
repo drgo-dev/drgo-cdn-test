@@ -1,211 +1,154 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
-import { supabase } from '@/lib/supabase';
-import { uploadToR2 } from '@/api/upload';
-import { useUserStore } from '@/stores/user';
 
+  import { ref, computed, onMounted } from 'vue';
+  import { supabase } from '@/lib/supabase';
+  import { uploadToR2 } from '@/api/upload';
+  import { useUserStore } from '@/stores/user';
 
-// ⚠️ 경로는 프로젝트 구조에 따라 다를 수 있습니다.
-// 기존에 '../stores/user' 를 쓰셨다면 그 경로로 바꾸세요.
-const userStore = useUserStore();
+  const userStore = useUserStore();
 
-// ---------------------- 상태 ----------------------
-const signatures = ref([]);
-const isLoading = ref(false);
-const activeTab = ref('all');
+  const signatures = ref([]);
+  const isLoading = ref(false);
+  const activeTab = ref('all');
+  const imageUrl = ref('');
+  const audioUrl = ref('');
+  const statusMessage = ref('사용자 정보를 확인 중입니다...');
 
-const imageUrl = ref('');
-const audioUrl = ref('');
-const statusMessage = ref('사용자 정보를 확인 중입니다...');
+  const user = computed(() => userStore.user);
+  const profile = computed(() => userStore.profile);
 
-// user/profile 은 store 를 통해 노출
-const user = computed(() => userStore.user);
-const profile = computed(() => userStore.profile);
-
-// ---------------------- 초기화 ----------------------
-onMounted(async () => {
-  // 1) 세션 조회
-  const { data: { session } } = await supabase.auth.getSession();
-
-  if (session?.user) {
-    // 2) 스토어에 사용자 채우기 (store 구조에 따라 속성명은 맞춰주세요)
-    userStore.user = session.user;
-
-    // 3) 프로필 로드 (profiles 테이블 기준)
-    const { data: prof, error: profErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-
-    if (!profErr) {
-      userStore.profile = prof; // grade, storage_used 등 포함
-      statusMessage.value = '';
-      // 4) 본인 시그니처 목록 로드
-      await fetchSignatures(session.user.id);
-    } else {
-      statusMessage.value = '프로필을 불러오지 못했습니다.';
-      console.error(profErr);
-    }
-  } else {
-    statusMessage.value = '로그인이 필요합니다.';
-  }
+  onMounted(async () => {
+  // 초기 세션/프로필은 main.js의 userStore.initialize()가 채웁니다.
+  if (user.value?.id) {
+  await fetchSignatures(user.value.id);
+  statusMessage.value = '';
+} else {
+  statusMessage.value = '로그인이 필요합니다.';
+}
 });
 
-// 세션 변경 감시 (로그인/로그아웃)
-supabase.auth.onAuthStateChange(async (_event, session) => {
+  // 세션 변경 시 목록 갱신
+  supabase.auth.onAuthStateChange(async (_e, session) => {
   if (session?.user) {
-    userStore.user = session.user;
-    const { data: prof, error: profErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-    if (!profErr) userStore.profile = prof;
-    await fetchSignatures(session.user.id);
-  } else {
-    userStore.user = null;
-    userStore.profile = null;
-    signatures.value = [];
-  }
+  await fetchSignatures(session.user.id);
+  statusMessage.value = '';
+} else {
+  signatures.value = [];
+  statusMessage.value = '로그인이 필요합니다.';
+}
 });
 
-// ---------------------- 목록 필터 ----------------------
-const filteredSignatures = computed(() => {
+  const filteredSignatures = computed(() => {
   if (activeTab.value === 'all') return signatures.value;
-  return signatures.value.filter((sig) => sig.file_type === activeTab.value);
+  return signatures.value.filter(s => s.file_type === activeTab.value);
 });
 
-// ---------------------- 목록 불러오기 ----------------------
-async function fetchSignatures(userId) {
+  async function fetchSignatures(userId) {
   if (!userId) return;
   try {
-    const { data, error } = await supabase
-        .from('signatures')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    signatures.value = data || [];
-  } catch (error) {
-    console.error('파일 목록 로딩 에러:', error);
-  }
+  const { data, error } = await supabase
+  .from('signatures')
+  .select('*')
+  .eq('user_id', userId)
+  .order('created_at', { ascending: false });
+  if (error) throw error;
+  signatures.value = data || [];
+} catch (err) {
+  console.error('파일 목록 로딩 에러:', err);
+}
 }
 
-// ---------------------- 업로드 ----------------------
-async function handleFileUpload(event, type) {
-  // 권한/등급 체크
-  if (!userStore?.profile?.grade || !['A', 'B', 'C'].includes(userStore.profile.grade)) {
-    alert('C등급 이상부터 파일을 업로드할 수 있습니다.');
-    return;
-  }
-
+  async function handleFileUpload(event, type) {
+  if (!profile.value?.grade || !['A', 'B', 'C'].includes(profile.value.grade)) {
+  alert('C등급 이상부터 파일을 업로드할 수 있습니다.');
+  return;
+}
   const file = event.target.files?.[0];
   if (!file) return;
 
   isLoading.value = true;
   try {
-    // 1) R2 업로드 (토큰 자동 포함)
-    const result = await uploadToR2(file);
-    // result: { ok: true, key, publicUrl, userId: ... }
-    if (!result?.ok) throw new Error(result?.error || '업로드에 실패했습니다.');
+  const result = await uploadToR2(file); // { ok, publicUrl }
+  const publicUrl = result.publicUrl;
 
-    const publicUrl = result.publicUrl;
+  const { error: dbError } = await supabase.from('signatures').insert({
+  file_name: file.name,
+  file_url: publicUrl,
+  file_type: type,
+  user_id: profile.value.id,  // profiles.id === user id
+  size: file.size,
+});
+  if (dbError) throw dbError;
 
-    // 2) DB 기록
-    const { error: dbError } = await supabase.from('signatures').insert({
-      file_name: file.name,
-      file_url: publicUrl,
-      file_type: type, // 'image' | 'audio'
-      user_id: userStore.profile.id,
-      size: file.size,
-    });
-    if (dbError) throw dbError;
+  if (type === 'image') imageUrl.value = publicUrl;
+  if (type === 'audio') audioUrl.value = publicUrl;
 
-    // 3) 미리보기/상태 반영
-    if (type === 'image') imageUrl.value = publicUrl;
-    if (type === 'audio') audioUrl.value = publicUrl;
-
-    alert('업로드 성공!');
-    await fetchSignatures(userStore.profile.id);
-    window.dispatchEvent(new Event('storage-changed'));
-  } catch (error) {
-    console.error(error);
-    alert(`오류가 발생했습니다: ${error.message}`);
-  } finally {
-    isLoading.value = false;
-    // 같은 파일 다시 선택 가능하게 input 초기화
-    if (event?.target) event.target.value = '';
-  }
+  alert('업로드 성공!');
+  await fetchSignatures(profile.value.id);
+  window.dispatchEvent(new Event('storage-changed'));
+} catch (error) {
+  console.error(error);
+  alert(`오류가 발생했습니다: ${error.message}`);
+} finally {
+  isLoading.value = false;
+  if (event?.target) event.target.value = '';
+}
 }
 
-// ---------------------- 삭제 ----------------------
-async function handleDelete(signature) {
+  async function handleDelete(signature) {
   if (!confirm(`'${signature.file_name}' 파일을 정말 삭제하시겠습니까?`)) return;
   isLoading.value = true;
   try {
-    // R2 키 추출 (https://host/<key>)
-    const fileKey = new URL(signature.file_url).pathname.substring(1);
+  const fileKey = new URL(signature.file_url).pathname.slice(1);
 
-    // 1) R2에서 삭제 (워커 라우트에 맞게 경로 조정: 예 '/delete' 또는 '/api/delete')
-    const res = await fetch('/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: fileKey }),
-    });
-    if (!res.ok) throw new Error('R2에서 파일 삭제를 실패했습니다.');
+  // 워커 라우트에 맞게 경로 조정 (예: '/delete' 또는 '/api/delete')
+  const res = await fetch('/delete', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ key: fileKey }),
+});
+  if (!res.ok) throw new Error('R2 파일 삭제 실패');
 
-    // 2) DB에서 삭제
-    const { error } = await supabase.from('signatures').delete().eq('id', signature.id);
-    if (error) throw error;
+  const { error } = await supabase.from('signatures').delete().eq('id', signature.id);
+  if (error) throw error;
 
-    alert('파일이 성공적으로 삭제되었습니다.');
-    await fetchSignatures(userStore.profile.id);
-    window.dispatchEvent(new Event('storage-changed'));
-  } catch (error) {
-    console.error(error);
-    alert(`오류가 발생했습니다: ${error.message}`);
-  } finally {
-    isLoading.value = false;
-  }
+  alert('파일이 성공적으로 삭제되었습니다.');
+  await fetchSignatures(profile.value.id);
+  window.dispatchEvent(new Event('storage-changed'));
+} catch (err) {
+  console.error(err);
+  alert(`오류가 발생했습니다: ${err.message}`);
+} finally {
+  isLoading.value = false;
+}
 }
 
-// ---------------------- 유틸 ----------------------
-function copyUrl(url) {
+  function copyUrl(url) {
   if (!url) return alert('복사할 URL이 없습니다.');
   navigator.clipboard.writeText(url)
-      .then(() => alert('클립보드에 URL이 복사되었습니다!'))
-      .catch(() => alert('클립보드 복사에 실패했습니다.'));
+  .then(() => alert('클립보드에 URL이 복사되었습니다!'))
+  .catch(() => alert('클립보드 복사 실패'));
 }
 
-function downloadFile(url, filename) {
+  function downloadFile(url, filename) {
   fetch(url)
-      .then((response) => {
-        if (!response.ok) throw new Error('파일을 다운로드할 수 없습니다.');
-        return response.blob();
+      .then(r => { if (!r.ok) throw new Error('다운로드 실패'); return r.blob(); })
+      .then(blob => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
       })
-      .then((blob) => {
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
-      })
-      .catch((err) => {
+      .catch(err => {
         console.error('다운로드 에러:', err);
-        alert('파일을 다운로드하는 중 오류가 발생했습니다.');
+        alert('파일 다운로드 중 오류가 발생했습니다.');
       });
 }
-
-// ---------------------- (선택) 파일 직접 선택 호출 예시 ----------------------
-async function onSelectFile(file) {
-  // 필요 시 외부에서 파일 객체만 받아 업로드
-  await handleFileUpload({ target: { files: [file] } }, 'image');
-}
 </script>
+
 
 <template>
   <div class="uploader-container">

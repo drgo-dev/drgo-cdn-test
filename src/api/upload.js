@@ -1,4 +1,3 @@
-// src/api/upload.js
 import { supabase } from '@/lib/supabase';
 
 export async function uploadToR2(file) {
@@ -7,17 +6,17 @@ export async function uploadToR2(file) {
 
     const form = new FormData();
     form.append('file', file);
-    form.append('user_id', session.user.id); // 서버에서 이 값과 토큰 사용자 일치 확인
+    form.append('user_id', session.user.id);
 
     const res = await fetch('/upload', {
         method: 'POST',
-        headers: {
-            Authorization: `Bearer ${session.access_token}`, // ★ 핵심
-        },
+        headers: { Authorization: `Bearer ${session.access_token}` },
         body: form,
     });
 
-    const json = await res.json();
-    if (!res.ok) throw new Error(json?.error || '업로드 실패');
-    return json;
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || '업로드 실패');
+    }
+    return json; // { ok, key, publicUrl, userId }
 }

@@ -1,57 +1,52 @@
 <script setup>
-import { ref } from 'vue';
-import { supabase } from '@/lib/supabase';
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { supabase } from '@/lib/supabase'
+import { useUserStore } from '@/stores/user'
 
-const email = ref('');
-const password = ref('');
-const errorMsg = ref('');
-const loading = ref(false);
+const router = useRouter()
+const userStore = useUserStore()
 
-async function login() {
-  errorMsg.value = '';
-  loading.value = true;
+// ✅ 템플릿에서 사용하는 상태들 전부 선언
+const email = ref('')
+const password = ref('')
+const isLoading = ref(false)
+const errorMessage = ref('')
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email: email.value,
-    password: password.value,
-  });
-
-  loading.value = false;
-  if (error) {
-    errorMsg.value = error.message;
+// (선택) 자동 로그인 상태라면 바로 리다이렉트
+async function redirectIfLoggedIn() {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session?.user) {
+    await userStore.fetchProfile()
+    router.replace({ name: 'home' }) // 라우트 이름은 프로젝트에 맞게
   }
 }
-/*  // 세션/토큰 확보
-  const { session, user } = data;
-}
+redirectIfLoggedIn()
 
-const handleLogin = async () => {
-  errorMessage.value = '';
-  if (!email.value || !password.value) {
-    errorMessage.value = '이메일과 비밀번호를 모두 입력해주세요.';
-    return;
-  }
-
-  isLoading.value = true;
+// ✅ 로그인 핸들러
+async function handleLogin() {
+  errorMessage.value = ''
+  isLoading.value = true
   try {
-    // Supabase 로그인 함수를 호출합니다.
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email: email.value,
       password: password.value,
-    });
+    })
+    if (error) throw error
 
-    if (error) throw error;
+    // 세션 반영 + 프로필 로드
+    const { data: { session } } = await supabase.auth.getSession()
+    userStore.user = session?.user ?? null
+    await userStore.fetchProfile()
 
-    // 로그인이 성공하면 '/signature' 페이지로 이동합니다.
-    /!*router.push('/signature');*!/
-
-  } catch (error) {
-    console.error('로그인 에러:', error);
-    errorMessage.value = '이메일 또는 비밀번호가 올바르지 않습니다.';
+    // 로그인 성공 후 이동 (프로젝트 라우트에 맞게 수정)
+    router.replace({ name: 'home' })
+  } catch (err) {
+    errorMessage.value = err.message || '로그인에 실패했습니다.'
   } finally {
-    isLoading.value = false;
+    isLoading.value = false
   }
-};*/
+}
 </script>
 
 <template>
@@ -81,9 +76,9 @@ const handleLogin = async () => {
           />
         </div>
 
-        <p v-if="errorMessage" class="message error">{{ errorMessage }}</p>
+        <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
-        <button type="submit" :disabled="isLoading" class="login-button">
+        <button :disabled="isLoading" @click="handleLogin" class="login-button">
           {{ isLoading ? '로그인 중...' : '로그인' }}
         </button>
       </form>

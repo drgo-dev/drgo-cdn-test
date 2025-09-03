@@ -35,6 +35,7 @@ const router = createRouter({
         },
     ],
 });
+
 router.beforeEach(async (to) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (to.meta.requiresAuth && !session) return { name: 'login' };

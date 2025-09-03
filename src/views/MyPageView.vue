@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '@/lib/supabase'
 
 const loading = ref(true);
 const user = ref(null);
