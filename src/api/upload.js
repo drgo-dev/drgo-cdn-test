@@ -1,7 +1,8 @@
 // src/api/upload.js
 import { supabase } from '@/lib/supabase';
-
+// src/api/upload.js
 const UPLOAD_ENDPOINT = import.meta.env.VITE_UPLOAD_ENDPOINT || '/upload';
+await fetch(UPLOAD_ENDPOINT, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
 
 export async function uploadToR2(file) {
     const { data: { session } } = await supabase.auth.getSession();

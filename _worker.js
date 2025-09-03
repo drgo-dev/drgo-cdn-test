@@ -1,4 +1,4 @@
-// _worker.js (추가된 진단 핸들러 포함)
+// _worker.js
 import { createClient } from '@supabase/supabase-js';
 
 const cors = {
@@ -13,15 +13,15 @@ export default {
     async fetch(request, env) {
         const url = new URL(request.url);
 
-        // Preflight
+        // CORS preflight
         if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
 
-        // ✅ 1) 워커 라우팅 확인용 핑
+        // ✅ 핑: 워커가 붙었는지 확인용
         if (url.pathname === '/upload' && request.method === 'GET') {
             return json({ ok: true, via: '_worker.js' });
         }
 
-        // 2) 실제 업로드
+        // 업로드
         if (url.pathname === '/upload' && request.method === 'POST') {
             try {
                 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY, {
@@ -48,7 +48,6 @@ export default {
 
                 await env.MY_BUCKET.put(key, file.stream(), { httpMetadata: { contentType: type } });
                 const publicUrl = `${env.R2_PUBLIC_URL}/${encodeURIComponent(key)}`;
-
                 return json({ ok: true, key, publicUrl, userId: authedUserId });
             } catch (e) {
                 console.error('Upload error:', e);
@@ -56,7 +55,7 @@ export default {
             }
         }
 
-        // 정적 에셋
+        // 나머지는 정적 파일로
         return env.ASSETS.fetch(request);
     },
 };
