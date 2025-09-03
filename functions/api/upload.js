@@ -1,68 +1,65 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js'
 
 const cors = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-
-const MAX_TOTAL_STORAGE = 300 * 1024 * 1024;
+}
 
 function json(data, status = 200) {
     return new Response(JSON.stringify(data), {
         status,
         headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    })
 }
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB 예시
+const ALLOWED_TYPES = ['image/', 'audio/']; // 접두어 비교
+
 export async function onRequestOptions() {
-    return new Response(null, { headers: cors });
+    return new Response(null, { headers: cors })
 }
 
 export async function onRequestPost({ request, env }) {
     try {
-        const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY, {
-            auth: { persistSession: false, autoRefreshToken: false },
-        });
+        const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY)
 
-        const authHeader = request.headers.get('Authorization') || '';
-        const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-        if (!token) return json({ error: '인증 토큰이 없습니다.' }, 401);
+        // 1) 토큰 검증
+        const authHeader = request.headers.get('Authorization') || ''
+        const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+        if (!token) return json({ error: '인증 토큰이 없습니다.' }, 401)
 
-        const { data: userData, error: uErr } = await supabase.auth.getUser(token);
-        if (uErr || !userData?.user?.id) return json({ error: '사용자 인증이 불가능합니다.' }, 401);
-        const authedUserId = userData.user.id;
+        const { data: userData, error } = await supabase.auth.getUser(token)
+        if (error || !userData?.user?.id) return json({ error: '사용자 인증 실패' }, 401)
+        const authedUserId = userData.user.id
 
-        const form = await request.formData();
-        const file = form.get('file');
-        const userId = (form.get('user_id') || '').toString();
+        // 2) 폼 파싱
+        const form = await request.formData()
+        const file = form.get('file')
+        const userId = (form.get('user_id') || '').toString()
 
-        if (!file || !file.name || !userId) return json({ error: '파일과 사용자 ID가 필요합니다.' }, 400);
-        if (userId !== authedUserId) return json({ error: '요청 사용자와 인증 정보가 일치하지 않습니다.' }, 403);
+        if (!file || !userId) return json({ error: '파일과 사용자 ID가 필요합니다.' }, 400)
+        if (userId !== authedUserId) return json({ error: '사용자 불일치' }, 403)
 
-        const { data: profile, error: pErr } = await supabase
-            .from('profiles')
-            .select('storage_used')
-            .eq('id', authedUserId)
-            .single();
-        if (pErr) throw new Error('사용자 프로필을 조회할 수 없습니다.');
-
-        if ((profile?.storage_used || 0) + file.size > MAX_TOTAL_STORAGE) {
-            return json({ error: '총 저장 공간이 부족하여 업로드할 수 없습니다.' }, 413);
+        // 3) 파일 제한 (선택 권장)
+        if (typeof file.size === 'number' && file.size > MAX_FILE_SIZE) {
+            return json({ error: '파일이 너무 큽니다.' }, 413)
+        }
+        const typeOk = ALLOWED_TYPES.some((p) => (file.type || '').startsWith(p))
+        if (!typeOk) {
+            return json({ error: '허용되지 않는 파일 형식입니다.' }, 415)
         }
 
-        const shortId = crypto.randomUUID().split('-')[0];
-        const ext = file.name.split('.').pop();
-        const key = `${shortId}.${ext}`;
-
+        // 4) R2 업로드
+        const key = `${crypto.randomUUID()}.${(file.name || 'file').split('.').pop() || 'bin'}`
         await env.MY_BUCKET.put(key, file.stream(), {
-            httpMetadata: { contentType: file.type },
-        });
+            httpMetadata: { contentType: file.type || 'application/octet-stream' },
+        })
 
-        const publicUrl = `${env.R2_PUBLIC_URL}/${encodeURIComponent(key)}`;
-        return json({ ok: true, key, publicUrl, userId: authedUserId });
+        const publicUrl = `${env.R2_PUBLIC_URL}/${encodeURIComponent(key)}`
+        return json({ ok: true, key, publicUrl, userId: authedUserId })
     } catch (e) {
-        console.error('Upload worker error:', e);
-        return json({ error: e.message }, 500);
+        console.error('Upload worker error:', e)
+        return json({ error: e.message || '서버 에러' }, 500)
     }
 }
