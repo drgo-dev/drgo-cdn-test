@@ -2,10 +2,11 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { supabase } from '@/lib/supabase';
 import { uploadToR2 } from '@/api/upload';
+import { useUserStore } from '@/stores/user';
+
 
 // ⚠️ 경로는 프로젝트 구조에 따라 다를 수 있습니다.
 // 기존에 '../stores/user' 를 쓰셨다면 그 경로로 바꾸세요.
-import { useUserStore } from '@/stores/user';
 const userStore = useUserStore();
 
 // ---------------------- 상태 ----------------------
