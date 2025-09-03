@@ -1,7 +1,8 @@
 <script setup>
 import { ref } from 'vue';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'vue-router';
+
 
 const email = ref('');
 const password = ref('');
@@ -10,6 +11,24 @@ const errorMessage = ref('');
 
 // 페이지 이동을 위해 Vue Router를 사용합니다.
 const router = useRouter();
+
+async function login() {
+  loading.value = true;
+  errorMsg.value = '';
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.value,
+    password: password.value,
+  });
+  loading.value = false;
+
+  if (error) {
+    errorMsg.value = error.message;
+    return;
+  }
+
+  // 세션/토큰 확보
+  const { session, user } = data;
+}
 
 const handleLogin = async () => {
   errorMessage.value = '';
