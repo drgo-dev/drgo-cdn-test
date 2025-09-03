@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import { supabase } from '../lib/supabaseClient.js';
+import { supabase } from '@/lib/supabase';
 // 방금 만든 로그인 뷰를 가져옵니다.
 import LoginView from '../views/LoginView.vue';
 import Signature from '../views/Signature.vue';
@@ -35,6 +35,12 @@ const router = createRouter({
         },
     ],
 });
+router.beforeEach(async (to) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (to.meta.requiresAuth && !session) return { name: 'login' };
+});
+/*
+
 // 페이지 이동이 일어나기 직전에 이 함수(문지기)가 항상 실행됩니다.
 router.beforeEach(async (to, from, next) => {
     // getSession()은 페이지 이동 시마다 호출되므로 onAuthStateChange보다 효율적입니다.
@@ -55,5 +61,6 @@ router.beforeEach(async (to, from, next) => {
         next();
     }
 });
+*/
 
 export default router;

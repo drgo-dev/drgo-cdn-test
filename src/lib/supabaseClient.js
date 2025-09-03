@@ -8,16 +8,27 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 */
+/*
 
+// src/lib/supabase.js
 import { createClient } from '@supabase/supabase-js';
 
-export const supabase = createClient(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_ANON_KEY,
-    {
-        auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-        },
-    }
-);
+// HMR(핫리로드) 시에도 1개만 유지
+const globalKey = '__supabase_singleton__';
+const _global = globalThis;
+
+export const supabase =
+    _global[globalKey] ||
+    (_global[globalKey] = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_SUPABASE_ANON_KEY,
+        {
+            auth: {
+                // 같은 origin에 여러 앱이 있으면 키를 앱별로 바꿔주세요
+                storageKey: 'drgo-app-auth',
+                persistSession: true,
+                autoRefreshToken: true,
+            },
+        }
+    ));
+    */

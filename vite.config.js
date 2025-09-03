@@ -1,7 +1,19 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
+import path from 'path';
 
+
+export default defineConfig({
+    plugins: [vue()],
+    resolve: {
+        alias: {
+            '@': path.resolve(__dirname, './src'),
+        },
+    },
+});
+
+/*
 export default defineConfig({
     plugins: [vue()],
     server: { // ❗️ 이 server 옵션을 추가합니다.
@@ -15,8 +27,10 @@ export default defineConfig({
         },
     },
     resolve: {
-        alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+        alias: { '@': path.resolve(__dirname, './src')
+        },
         dedupe: ['vue'],
     },
     base: '/',
 })
+*/
